@@ -1,18 +1,42 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { clsx } from "clsx";
 import { Button } from "./ui/Button";
+import { pipsToSplit } from "@/lib/pips";
 
 const NAV_LINKS = [
-  { href: "/market",    label: "Market" },
+  { href: "/market",     label: "Market" },
   { href: "/buy-orders", label: "Buy orders" },
-  { href: "/auctions",  label: "Auctions" },
-  { href: "/trends",    label: "Trends" },
+  { href: "/auctions",   label: "Auctions" },
+  { href: "/trends",     label: "Trends" },
 ];
+
+interface WalletState {
+  availablePips: bigint | null;
+  isLoggedIn: boolean | null;
+}
 
 export function Navbar() {
   const pathname = usePathname();
+  const [wallet, setWallet] = useState<WalletState>({ availablePips: null, isLoggedIn: null });
+
+  useEffect(() => {
+    fetch("/api/wallet/balance")
+      .then(async (res) => {
+        if (res.status === 401) {
+          setWallet({ availablePips: null, isLoggedIn: false });
+          return;
+        }
+        if (!res.ok) return;
+        const data = await res.json();
+        setWallet({ availablePips: BigInt(data.availablePips), isLoggedIn: true });
+      })
+      .catch(() => {});
+  }, [pathname]);
+
+  const split = wallet.availablePips != null ? pipsToSplit(wallet.availablePips) : null;
 
   return (
     <header
@@ -56,33 +80,49 @@ export function Navbar() {
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
-          <div
-            className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] px-3 py-1.5 font-mono text-sm"
-            style={{ background: "var(--bg-surface)" }}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-              <rect x="1" y="3" width="12" height="9" rx="2" stroke="var(--accent)" strokeWidth="1.3"/>
-              <path d="M10 7H14" stroke="var(--accent)" strokeWidth="1.3"/>
-              <circle cx="11.5" cy="7" r="1" fill="var(--accent)"/>
-            </svg>
-            <span style={{ color: "var(--text-primary)" }}>$0.<span style={{ color: "var(--accent)" }}>0000</span></span>
-          </div>
-
-          <Link href="/inventory">
-            <Button variant="ghost" size="sm" className="gap-2">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-                <rect x="2" y="4" width="12" height="9" rx="2" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M5 4V3a2 2 0 014 0v1" stroke="currentColor" strokeWidth="1.3"/>
+          {wallet.isLoggedIn === true && (
+            <div
+              className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] px-3 py-1.5 font-mono text-sm"
+              style={{ background: "var(--bg-surface)" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+                <rect x="1" y="3" width="12" height="9" rx="2" stroke="var(--accent)" strokeWidth="1.3"/>
+                <path d="M10 7H14" stroke="var(--accent)" strokeWidth="1.3"/>
+                <circle cx="11.5" cy="7" r="1" fill="var(--accent)"/>
               </svg>
-              Inventory
-            </Button>
-          </Link>
+              {split ? (
+                <span style={{ color: "var(--text-primary)" }}>
+                  {split.whole}<span style={{ color: "var(--accent)" }}>{split.sub}</span>
+                </span>
+              ) : (
+                <span style={{ color: "var(--text-hint)" }}>$0.<span style={{ color: "var(--accent)" }}>0000</span></span>
+              )}
+            </div>
+          )}
 
-          <Link href="/api/auth/steam">
-            <Button variant="primary" size="sm">
-              Sign in with Steam
-            </Button>
-          </Link>
+          {wallet.isLoggedIn === true && (
+            <Link href="/inventory">
+              <Button variant="ghost" size="sm" className="gap-2">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <rect x="2" y="4" width="12" height="9" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+                  <path d="M5 4V3a2 2 0 014 0v1" stroke="currentColor" strokeWidth="1.3"/>
+                </svg>
+                Inventory
+              </Button>
+            </Link>
+          )}
+
+          {wallet.isLoggedIn === false && (
+            <Link href="/api/auth/steam">
+              <Button variant="primary" size="sm">
+                Sign in with Steam
+              </Button>
+            </Link>
+          )}
+
+          {wallet.isLoggedIn === null && (
+            <div className="h-8 w-28 animate-pulse rounded-[var(--radius-md)]" style={{ background: "var(--bg-elevated)" }} />
+          )}
         </div>
       </div>
     </header>

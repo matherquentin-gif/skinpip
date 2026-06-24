@@ -1,32 +1,87 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { db } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { dollarsToPips } from "@/lib/pips";
 
 const DepositSchema = z.object({
-  amountCents: z.number().int().min(100).max(1_000_000),
-  idempotencyKey: z.string().min(1),
+  amountUsd: z.number().min(5).max(10000),
 });
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  // Auth
+  let user;
+  try {
+    user = await requireUser(req);
+  } catch (e) {
+    if (e instanceof NextResponse) return e;
+    throw e;
+  }
+
+  // Parse body
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
   const parsed = DepositSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { amountCents, idempotencyKey } = parsed.data;
+  const { amountUsd } = parsed.data;
 
-  // TODO: verify session, create Stripe PaymentIntent, record pending in DB
-  // const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-  // const intent = await stripe.paymentIntents.create({
-  //   amount: amountCents,
-  //   currency: "usd",
-  //   idempotencyKey,
-  //   metadata: { userId, amountPips: String(centsToPips(amountCents)) },
-  // });
-  // await db.paymentIntent.create({
-  //   data: { userId, stripeId: intent.id, amountCents, amountPips: centsToPips(amountCents), idempotencyKey },
-  // });
-  // return NextResponse.json({ clientSecret: intent.client_secret });
+  // Validate range (belt-and-suspenders — zod already checks this)
+  if (amountUsd < 5 || amountUsd > 10000) {
+    return NextResponse.json(
+      { error: "amountUsd must be between 5 and 10000" },
+      { status: 422 }
+    );
+  }
 
-  return NextResponse.json({ error: "Not implemented — connect Stripe and DB" }, { status: 501 });
+  const amountPips = dollarsToPips(amountUsd);
+  // Cents for Stripe (1 USD = 100 cents)
+  const amountCents = Math.round(amountUsd * 100);
+
+  try {
+    // TODO: When Stripe is connected, create a real Stripe PaymentIntent here:
+    //   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+    //   const intent = await stripe.paymentIntents.create({
+    //     amount: amountCents,
+    //     currency: "usd",
+    //     metadata: { userId: user.id, amountPips: amountPips.toString() },
+    //   });
+    //   Then replace stripeId below with intent.id and clientSecret with intent.client_secret.
+
+    // Stub: use a placeholder stripeId until Stripe is wired up
+    const stubStripeId = `pi_stub_${Date.now()}_${user.id}`;
+    const idempotencyKey = `deposit_${user.id}_${Date.now()}`;
+
+    const paymentIntent = await db.paymentIntent.create({
+      data: {
+        userId: user.id,
+        stripeId: stubStripeId,
+        amountCents,
+        amountPips,
+        currency: "usd",
+        status: "PENDING",
+        idempotencyKey,
+      },
+    });
+
+    return NextResponse.json({
+      // TODO: replace with real Stripe clientSecret once Stripe is connected
+      clientSecret: "pending",
+      paymentIntentId: paymentIntent.id,
+      amountPips: paymentIntent.amountPips.toString(),
+    });
+  } catch (err) {
+    console.error("[POST /api/wallet/deposit]", err);
+    return NextResponse.json(
+      { error: "Failed to create deposit" },
+      { status: 500 }
+    );
+  }
 }
