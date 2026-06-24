@@ -1,0 +1,483 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum KycTier {
+  NONE
+  EMAIL
+  ID_VERIFIED
+}
+
+enum OrderSide {
+  BID
+  ASK
+}
+
+enum OrderStatus {
+  OPEN
+  PARTIAL
+  FILLED
+  CANCELLED
+  EXPIRED
+}
+
+enum TradeOfferStatus {
+  CREATED
+  SENT
+  ACCEPTED
+  CONFIRMED
+  SETTLED
+  FAILED
+  CANCELLED
+}
+
+enum AuctionStatus {
+  ACTIVE
+  ENDED
+  SETTLED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum CryptoTxStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum SettlementType {
+  BOT_CUSTODY
+  P2P_DIRECT
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  CANCELLED
+  EXPIRED
+}
+
+model User {
+  id               String          @id @default(cuid())
+  steamId          String          @unique
+  displayName      String
+  avatarUrl        String?
+  tradeUrl         String?
+  kycTier          KycTier         @default(NONE)
+  twoFactorEnabled Boolean         @default(false)
+  twoFactorSecret  String?
+  isBanned         Boolean         @default(false)
+  banReason        String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  wallet           WalletAccount?
+  items            Item[]          @relation("ItemOwner")
+  listings         Listing[]
+  orders           Order[]
+  bids             Bid[]
+  paymentIntents   PaymentIntent[]
+  payouts          Payout[]
+  cryptoTxs        CryptoTx[]
+  disputes         DisputeCase[]   @relation("DisputeInitiator")
+  auditLogs        AuditLog[]
+  watchlists       Watchlist[]
+  sellerTrades     Trade[]         @relation("TradeSeller")
+  buyerTrades      Trade[]         @relation("TradeBuyer")
+
+  @@index([steamId])
+}
+
+model WalletAccount {
+  id               String          @id @default(cuid())
+  userId           String          @unique
+  user             User            @relation(fields: [userId], references: [id])
+  balancePips      BigInt          @default(0)
+  reservedPips     BigInt          @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  ledgerEntries    LedgerEntry[]
+
+  @@index([userId])
+}
+
+model LedgerEntry {
+  id               String          @id @default(cuid())
+  walletAccountId  String
+  walletAccount    WalletAccount   @relation(fields: [walletAccountId], references: [id])
+  amountPips       BigInt
+  balanceAfterPips BigInt
+  type             String
+  referenceId      String?
+  referenceType    String?
+  createdAt        DateTime        @default(now())
+
+  @@index([walletAccountId])
+  @@index([referenceId, referenceType])
+}
+
+model PhaseMap {
+  id         String @id @default(cuid())
+  paintIndex Int    @unique
+  phaseLabel String
+
+  @@index([paintIndex])
+}
+
+model PatternTier {
+  id          String  @id @default(cuid())
+  skinName    String
+  paintSeed   Int
+  tierLabel   String
+  description String?
+  fadePercent Float?
+  isBlueGem   Boolean @default(false)
+
+  @@unique([skinName, paintSeed])
+  @@index([skinName, paintSeed])
+}
+
+model Item {
+  id               String          @id @default(cuid())
+  assetId          String          @unique
+  ownerId          String
+  owner            User            @relation("ItemOwner", fields: [ownerId], references: [id])
+  botAccountId     String?
+  botAccount       BotAccount?     @relation(fields: [botAccountId], references: [id])
+  defIndex         Int
+  paintIndex       Int?
+  paintSeed        Int?
+  paintWear        Float?
+  phaseLabel       String?
+  patternTierLabel String?
+  fadePercent      Float?
+  isStatTrak       Boolean         @default(false)
+  isSouvenir       Boolean         @default(false)
+  skinName         String
+  weaponName       String
+  wearName         String?
+  rarity           String?
+  collection       String?
+  stickers         Json?
+  charms           Json?
+  nameTag          String?
+  inspectLink      String?
+  imageUrl         String?
+  settlementType   SettlementType  @default(BOT_CUSTODY)
+  isListed         Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  listing          Listing?
+  auctionItem      Auction?
+  trades           Trade[]
+
+  @@index([ownerId])
+  @@index([paintSeed])
+  @@index([paintIndex])
+  @@index([skinName, wearName])
+}
+
+model MarketDefinition {
+  id           String          @id @default(cuid())
+  skinName     String
+  weaponName   String
+  wearName     String?
+  paintIndex   Int?
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+
+  listings     Listing[]
+  orders       Order[]
+  priceTicks   PriceTick[]
+  priceCandles PriceCandle[]
+
+  @@unique([skinName, wearName, paintIndex])
+  @@index([skinName])
+}
+
+model Listing {
+  id               String           @id @default(cuid())
+  sellerId         String
+  seller           User             @relation(fields: [sellerId], references: [id])
+  itemId           String           @unique
+  item             Item             @relation(fields: [itemId], references: [id])
+  marketId         String
+  market           MarketDefinition @relation(fields: [marketId], references: [id])
+  pricePips        BigInt
+  minimumOfferPips BigInt?
+  status           ListingStatus    @default(ACTIVE)
+  expiresAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  trade            Trade?
+
+  @@index([sellerId])
+  @@index([marketId, pricePips])
+  @@index([status])
+}
+
+model Order {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  marketId       String
+  market         MarketDefinition @relation(fields: [marketId], references: [id])
+  side           OrderSide
+  pricePips      BigInt
+  quantity       Int              @default(1)
+  filledQuantity Int              @default(0)
+  status         OrderStatus      @default(OPEN)
+  conditions     Json?
+  expiresAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  makerTrades    Trade[]          @relation("MakerOrder")
+  takerTrades    Trade[]          @relation("TakerOrder")
+
+  @@index([userId])
+  @@index([marketId, side, pricePips])
+  @@index([status])
+}
+
+model Trade {
+  id            String    @id @default(cuid())
+  sellerId      String
+  seller        User      @relation("TradeSeller", fields: [sellerId], references: [id])
+  buyerId       String
+  buyer         User      @relation("TradeBuyer", fields: [buyerId], references: [id])
+  itemId        String
+  item          Item      @relation(fields: [itemId], references: [id])
+  listingId     String?   @unique
+  listing       Listing?  @relation(fields: [listingId], references: [id])
+  makerOrderId  String?
+  makerOrder    Order?    @relation("MakerOrder", fields: [makerOrderId], references: [id])
+  takerOrderId  String?
+  takerOrder    Order?    @relation("TakerOrder", fields: [takerOrderId], references: [id])
+  pricePips     BigInt
+  sellerFeePips BigInt
+  buyerFeePips  BigInt
+  createdAt     DateTime  @default(now())
+
+  @@index([sellerId])
+  @@index([buyerId])
+  @@index([createdAt])
+}
+
+model Auction {
+  id               String        @id @default(cuid())
+  sellerId         String
+  itemId           String        @unique
+  item             Item          @relation(fields: [itemId], references: [id])
+  startPricePips   BigInt
+  reservePips      BigInt?
+  buyNowPips       BigInt?
+  currentBidPips   BigInt?
+  minIncrementPips BigInt        @default(100)
+  antiSnipeSeconds Int           @default(60)
+  status           AuctionStatus @default(ACTIVE)
+  endsAt           DateTime
+  settledAt        DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  bids             Bid[]
+
+  @@index([sellerId])
+  @@index([status, endsAt])
+}
+
+model Bid {
+  id         String   @id @default(cuid())
+  auctionId  String
+  auction    Auction  @relation(fields: [auctionId], references: [id])
+  bidderId   String
+  bidder     User     @relation(fields: [bidderId], references: [id])
+  amountPips BigInt
+  isProxy    Boolean  @default(false)
+  maxPips    BigInt?
+  createdAt  DateTime @default(now())
+
+  @@index([auctionId, amountPips])
+  @@index([bidderId])
+}
+
+model PriceTick {
+  id        String           @id @default(cuid())
+  marketId  String
+  market    MarketDefinition @relation(fields: [marketId], references: [id])
+  pricePips BigInt
+  volume    Int              @default(1)
+  createdAt DateTime         @default(now())
+
+  @@index([marketId, createdAt])
+}
+
+model PriceCandle {
+  id        String           @id @default(cuid())
+  marketId  String
+  market    MarketDefinition @relation(fields: [marketId], references: [id])
+  interval  String
+  openPips  BigInt
+  highPips  BigInt
+  lowPips   BigInt
+  closePips BigInt
+  volume    Int
+  timestamp DateTime
+
+  @@unique([marketId, interval, timestamp])
+  @@index([marketId, interval, timestamp])
+}
+
+model Watchlist {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  name      String
+  createdAt DateTime    @default(now())
+
+  items     WatchItem[]
+
+  @@index([userId])
+}
+
+model WatchItem {
+  id          String    @id @default(cuid())
+  watchlistId String
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id])
+  skinName    String
+  paintIndex  Int?
+  seedFilter  Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([watchlistId])
+}
+
+model BotAccount {
+  id             String          @id @default(cuid())
+  steamId        String          @unique
+  username       String
+  sharedSecret   String
+  identitySecret String
+  isActive       Boolean         @default(true)
+  inventoryCount Int             @default(0)
+  lastLogin      DateTime?
+  createdAt      DateTime        @default(now())
+
+  items          Item[]
+  tradeOfferJobs TradeOfferJob[]
+}
+
+model TradeOfferJob {
+  id                String           @id @default(cuid())
+  botAccountId      String
+  botAccount        BotAccount       @relation(fields: [botAccountId], references: [id])
+  userId            String
+  direction         String
+  steamTradeOfferId String?
+  itemAssetIds      Json
+  status            TradeOfferStatus @default(CREATED)
+  attempts          Int              @default(0)
+  lastError         String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([botAccountId])
+  @@index([userId])
+  @@index([status])
+}
+
+model PaymentIntent {
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  stripeId       String        @unique
+  amountCents    Int
+  amountPips     BigInt
+  currency       String        @default("usd")
+  status         PaymentStatus @default(PENDING)
+  idempotencyKey String        @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([stripeId])
+}
+
+model Payout {
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  stripeId       String?       @unique
+  amountPips     BigInt
+  amountCents    Int
+  currency       String        @default("usd")
+  status         PaymentStatus @default(PENDING)
+  idempotencyKey String        @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([userId])
+}
+
+model CryptoTx {
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id])
+  direction      String
+  currency       String
+  amountRaw      String
+  amountPips     BigInt
+  walletAddress  String?
+  providerTxId   String?
+  riskScore      Float?
+  status         CryptoTxStatus @default(PENDING)
+  idempotencyKey String         @unique
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([userId])
+}
+
+model DisputeCase {
+  id            String   @id @default(cuid())
+  initiatorId   String
+  initiator     User     @relation("DisputeInitiator", fields: [initiatorId], references: [id])
+  referenceId   String
+  referenceType String
+  reason        String
+  status        String   @default("OPEN")
+  resolution    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([initiatorId])
+  @@index([status])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
