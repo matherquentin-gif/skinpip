@@ -1,10 +1,35 @@
 import Link from "next/link";
+import { db } from "@/lib/db";
+import { demoHomeStats } from "@/lib/demo-data";
 
-const STATS = [
-  { label: "Skins listed", value: "—" },
-  { label: "Trades today", value: "—" },
-  { label: "Min price", value: "$0.00001" },
-  { label: "Avg fee", value: "2%" },
+export const dynamic = "force-dynamic";
+
+async function getStats() {
+  try {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const [listings, trades] = await Promise.all([
+      db.listing.count({ where: { status: "ACTIVE" } }),
+      db.trade.count({ where: { createdAt: { gte: startOfToday } } }),
+    ]);
+    if (listings === 0) return demoHomeStats();
+    return [
+      { label: "Skins listed", value: listings.toLocaleString() },
+      { label: "Trades today", value: trades.toLocaleString() },
+      { label: "Min price", value: "$0.00001" },
+      { label: "Avg fee", value: "2%" },
+    ];
+  } catch {
+    // No DB connected — show representative demo figures.
+    return demoHomeStats();
+  }
+}
+
+const TRUST = [
+  "Escrowed & bot-custody trades",
+  "2FA + trade confirmations",
+  "No case-opening or gambling",
+  "Provable double-entry ledger",
 ];
 
 const FEATURES = [
@@ -72,7 +97,8 @@ const FEATURES = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const STATS = await getStats();
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-12 space-y-16">
       <section className="text-center space-y-6 py-8">
@@ -119,6 +145,18 @@ export default function Home() {
             <p className="font-mono text-2xl font-semibold" style={{ color: "var(--accent)" }}>{s.value}</p>
             <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{s.label}</p>
           </div>
+        ))}
+      </section>
+
+      <section className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+        {TRUST.map((t) => (
+          <span key={t} className="inline-flex items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+              <path d="M7 1.5 2 3.5v3c0 3 2.1 4.8 5 6 2.9-1.2 5-3 5-6v-3L7 1.5Z" stroke="var(--accent)" strokeWidth="1.2" strokeLinejoin="round" />
+              <path d="M5 7l1.4 1.4L9 5.5" stroke="var(--accent)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {t}
+          </span>
         ))}
       </section>
 

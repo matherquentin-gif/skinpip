@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { clsx } from "clsx";
+import type { Time } from "lightweight-charts";
 
 export interface CandleData {
   time: number;
@@ -34,7 +35,8 @@ export function PriceChart({ data, className, onRangeChange }: PriceChartProps) 
     async function init() {
       if (!containerRef.current || !data.length) return;
 
-      const { createChart, ColorType, LineStyle } = await import("lightweight-charts");
+      const { createChart, ColorType, LineStyle, LineSeries, CandlestickSeries, HistogramSeries } =
+        await import("lightweight-charts");
 
       chart = createChart(containerRef.current, {
         layout: {
@@ -62,24 +64,24 @@ export function PriceChart({ data, className, onRangeChange }: PriceChartProps) 
         height: 200,
       });
 
+      // lightweight-charts v5: series are added via addSeries(SeriesDefinition, options).
       const c = chart as {
-        addLineSeries: (opts: unknown) => { setData: (d: unknown) => void };
-        addHistogramSeries: (opts: unknown) => { setData: (d: unknown) => void };
-        addCandlestickSeries: (opts: unknown) => { setData: (d: unknown) => void };
+        addSeries: (def: unknown, opts: unknown) => { setData: (d: unknown) => void; priceScale?: () => { applyOptions: (o: unknown) => void } };
+        priceScale: (id: string) => { applyOptions: (o: unknown) => void };
         timeScale: () => { fitContent: () => void };
         resize: (w: number, h: number) => void;
         remove: () => void;
       };
 
       if (chartType === "line") {
-        const lineSeries = c.addLineSeries({
+        const lineSeries = c.addSeries(LineSeries, {
           color: "#25E59A",
           lineWidth: 2,
           priceLineVisible: false,
         });
-        lineSeries.setData(data.map((d) => ({ time: d.time, value: d.close })));
+        lineSeries.setData(data.map((d) => ({ time: d.time as Time, value: d.close })));
       } else {
-        const candleSeries = c.addCandlestickSeries({
+        const candleSeries = c.addSeries(CandlestickSeries, {
           upColor: "#25E59A",
           downColor: "#FF5C61",
           borderUpColor: "#25E59A",
@@ -87,16 +89,20 @@ export function PriceChart({ data, className, onRangeChange }: PriceChartProps) 
           wickUpColor: "#25E59A",
           wickDownColor: "#FF5C61",
         });
-        candleSeries.setData(data.map((d) => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close })));
+        candleSeries.setData(
+          data.map((d) => ({ time: d.time as Time, open: d.open, high: d.high, low: d.low, close: d.close })),
+        );
       }
 
-      const volSeries = c.addHistogramSeries({
+      const volSeries = c.addSeries(HistogramSeries, {
         color: "#1E5A45",
         priceFormat: { type: "volume" },
         priceScaleId: "vol",
-        scaleMargins: { top: 0.8, bottom: 0 },
       });
-      volSeries.setData(data.map((d) => ({ time: d.time, value: d.volume, color: d.close >= d.open ? "#1E5A45" : "#3A1A1A" })));
+      volSeries.setData(
+        data.map((d) => ({ time: d.time as Time, value: d.volume, color: d.close >= d.open ? "#1E5A45" : "#3A1A1A" })),
+      );
+      c.priceScale("vol").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
 
       c.timeScale().fitContent();
 

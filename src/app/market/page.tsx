@@ -1,8 +1,9 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { SearchBar } from "@/components/SearchBar";
 import { SkinCard, type SkinCardData } from "@/components/SkinCard";
 import { type SkinSearchFilters } from "@/lib/search-params";
+import { demoMarketItems } from "@/lib/demo-data";
 
 const SORT_OPTIONS = [
   { value: "price_asc",   label: "Price: low to high" },
@@ -14,106 +15,27 @@ const SORT_OPTIONS = [
 
 const WEAR_OPTIONS = ["Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle-Scarred"];
 
-const MOCK_ITEMS: SkinCardData[] = [
-  {
-    id: "1",
-    skinName: "Gamma Doppler",
-    weaponName: "Karambit",
-    wearName: "Factory New",
-    imageUrl: null,
-    paintWear: 0.00834,
-    paintSeed: 412,
-    phaseLabel: "Emerald",
-    patternTierLabel: null,
-    isStatTrak: false,
-    isSouvenir: false,
-    pricePips: 124755200n,
-    changePercent: 4.8,
-  },
-  {
-    id: "2",
-    skinName: "Doppler",
-    weaponName: "Butterfly Knife",
-    wearName: "Factory New",
-    imageUrl: null,
-    paintWear: 0.01245,
-    paintSeed: 777,
-    phaseLabel: "Sapphire",
-    patternTierLabel: null,
-    isStatTrak: true,
-    isSouvenir: false,
-    pricePips: 89500000n,
-    changePercent: -2.1,
-  },
-  {
-    id: "3",
-    skinName: "Case Hardened",
-    weaponName: "AK-47",
-    wearName: "Field-Tested",
-    imageUrl: null,
-    paintWear: 0.23,
-    paintSeed: 661,
-    phaseLabel: null,
-    patternTierLabel: "Blue Gem Tier 1",
-    isStatTrak: false,
-    isSouvenir: false,
-    pricePips: 450000000n,
-    changePercent: 12.3,
-  },
-  {
-    id: "4",
-    skinName: "Fade",
-    weaponName: "Karambit",
-    wearName: "Factory New",
-    imageUrl: null,
-    paintWear: 0.004,
-    paintSeed: 100,
-    phaseLabel: null,
-    patternTierLabel: "Full Fade",
-    isStatTrak: false,
-    isSouvenir: false,
-    pricePips: 72000000n,
-    changePercent: 1.2,
-  },
-  {
-    id: "5",
-    skinName: "Redline",
-    weaponName: "AK-47",
-    wearName: "Field-Tested",
-    imageUrl: null,
-    paintWear: 0.18,
-    paintSeed: 44,
-    phaseLabel: null,
-    patternTierLabel: null,
-    isStatTrak: false,
-    isSouvenir: false,
-    pricePips: 1240n,
-    changePercent: -0.3,
-  },
-  {
-    id: "6",
-    skinName: "Dragon Lore",
-    weaponName: "AWP",
-    wearName: "Factory New",
-    imageUrl: null,
-    paintWear: 0.01,
-    paintSeed: 500,
-    phaseLabel: null,
-    patternTierLabel: null,
-    isStatTrak: false,
-    isSouvenir: false,
-    pricePips: 500000000n,
-    changePercent: 0.8,
-  },
-];
+interface ApiItem extends Omit<SkinCardData, "pricePips"> {
+  pricePips: string;
+  liquidity?: number;
+}
+
+function toCard(it: ApiItem): SkinCardData {
+  return { ...it, pricePips: BigInt(it.pricePips) };
+}
 
 export default function MarketPage() {
-  const [items, setItems] = useState<SkinCardData[]>(MOCK_ITEMS);
+  // Render with demo data immediately; the API call replaces it (demo or DB).
+  const [items, setItems] = useState<SkinCardData[]>(() => demoMarketItems());
   const [sort, setSort] = useState("price_asc");
   const [selectedWears, setSelectedWears] = useState<string[]>([]);
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
+  const [filters, setFilters] = useState<SkinSearchFilters>({});
   const [loading, setLoading] = useState(false);
+  const [source, setSource] = useState<"db" | "demo" | null>(null);
 
-  const handleSearch = useCallback(async (filters: SkinSearchFilters) => {
+  const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -122,31 +44,57 @@ export default function MarketPage() {
       if (filters.phases?.length) params.set("phases", filters.phases.join(","));
       if (filters.floatMin !== undefined) params.set("floatMin", String(filters.floatMin));
       if (filters.floatMax !== undefined) params.set("floatMax", String(filters.floatMax));
+      if (filters.isStatTrak !== undefined) params.set("statTrak", String(filters.isStatTrak));
+      if (selectedWears.length) params.set("wears", selectedWears.join(","));
       params.set("sort", sort);
 
       const res = await fetch(`/api/market?${params}`);
       if (res.ok) {
         const data = await res.json();
-        setItems(data.items ?? MOCK_ITEMS);
+        let mapped: SkinCardData[] = (data.items as ApiItem[]).map(toCard);
+        // Client-side price-range filter (USD → pips).
+        const min = priceMin ? BigInt(Math.round(parseFloat(priceMin) * 100_000)) : null;
+        const max = priceMax ? BigInt(Math.round(parseFloat(priceMax) * 100_000)) : null;
+        if (min !== null) mapped = mapped.filter((i) => i.pricePips >= min);
+        if (max !== null) mapped = mapped.filter((i) => i.pricePips <= max);
+        setItems(mapped);
+        setSource(data.source ?? null);
       }
     } catch {
-      // keep showing mock data on error
+      // keep current items on error
     } finally {
       setLoading(false);
     }
-  }, [sort]);
+  }, [filters, sort, selectedWears, priceMin, priceMax]);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
+
+  const handleSearch = useCallback((f: SkinSearchFilters) => setFilters(f), []);
 
   function toggleWear(w: string) {
-    setSelectedWears((p) => p.includes(w) ? p.filter((x) => x !== w) : [...p, w]);
+    setSelectedWears((p) => (p.includes(w) ? p.filter((x) => x !== w) : [...p, w]));
   }
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Market</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-          {items.length.toLocaleString()} listings · pip precision pricing · sub-cent trades
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Market</h1>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+            {items.length.toLocaleString()} listings · pip precision pricing · sub-cent trades
+          </p>
+        </div>
+        {source === "demo" && (
+          <span
+            className="mt-1 shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-medium"
+            style={{ borderColor: "var(--warn)", color: "var(--warn)", background: "rgba(245,166,35,0.08)" }}
+            title="No database connected — showing deterministic demo data. Run `npm run seed` for live DB data."
+          >
+            Demo data
+          </span>
+        )}
       </div>
 
       <SearchBar onSearch={handleSearch} className="mb-6" />
@@ -172,11 +120,15 @@ export default function MarketPage() {
             <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>Price range</p>
             <div className="space-y-1.5">
               <input
+                value={priceMin}
+                onChange={(e) => setPriceMin(e.target.value)}
                 placeholder="Min $"
                 className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-input)] px-2.5 py-1.5 text-xs font-mono outline-none focus:border-[var(--border-focus)]"
                 style={{ color: "var(--text-primary)" }}
               />
               <input
+                value={priceMax}
+                onChange={(e) => setPriceMax(e.target.value)}
                 placeholder="Max $"
                 className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-input)] px-2.5 py-1.5 text-xs font-mono outline-none focus:border-[var(--border-focus)]"
                 style={{ color: "var(--text-primary)" }}
@@ -211,6 +163,13 @@ export default function MarketPage() {
                   style={{ background: "var(--bg-surface)" }}
                 />
               ))}
+            </div>
+          ) : items.length === 0 ? (
+            <div
+              className="rounded-[var(--radius-lg)] border border-[var(--border)] py-16 text-center text-sm"
+              style={{ background: "var(--bg-surface)", color: "var(--text-muted)" }}
+            >
+              No listings match your filters.
             </div>
           ) : (
             <div className="grid grid-cols-4 gap-4">

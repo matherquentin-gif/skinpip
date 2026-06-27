@@ -3,37 +3,21 @@ import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PipDisplay } from "@/components/ui/PipDisplay";
+import { demoAuctions } from "@/lib/demo-data";
 
-interface MockAuction {
-  id: string;
-  weapon: string;
-  skinName: string;
-  phase: string | null;
-  wear: string;
-  float: number;
-  currentBidPips: bigint;
-  startPricePips: bigint;
-  buyNowPips: bigint | null;
-  endsAt: Date;
-  bidCount: number;
-  isStatTrak: boolean;
-}
-
-const MOCK_AUCTIONS: MockAuction[] = [
-  { id: "1", weapon: "Karambit", skinName: "Gamma Doppler", phase: "Emerald", wear: "FN", float: 0.00834, currentBidPips: 118000000n, startPricePips: 100000000n, buyNowPips: 140000000n, endsAt: new Date(Date.now() + 3 * 3600_000 + 27 * 60_000), bidCount: 7, isStatTrak: false },
-  { id: "2", weapon: "AWP", skinName: "Dragon Lore", phase: null, wear: "FN", float: 0.011, currentBidPips: 485000000n, startPricePips: 450000000n, buyNowPips: null, endsAt: new Date(Date.now() + 22 * 3600_000), bidCount: 14, isStatTrak: false },
-  { id: "3", weapon: "Butterfly Knife", skinName: "Doppler", phase: "Sapphire", wear: "FN", float: 0.00211, currentBidPips: 88000000n, startPricePips: 70000000n, buyNowPips: 100000000n, endsAt: new Date(Date.now() + 47 * 60_000), bidCount: 3, isStatTrak: true },
-];
-
-function Countdown({ endsAt }: { endsAt: Date }) {
-  const [remaining, setRemaining] = useState(Math.max(0, endsAt.getTime() - Date.now()));
+function Countdown({ endsInMs }: { endsInMs: number }) {
+  // Initialise from the static relative duration so the server-rendered HTML
+  // and the first client render match exactly (no hydration mismatch). The
+  // real wall-clock deadline is resolved on the client, inside the effect.
+  const [remaining, setRemaining] = useState(endsInMs);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setRemaining(Math.max(0, endsAt.getTime() - Date.now()));
-    }, 1000);
+    const deadline = Date.now() + endsInMs;
+    const tick = () => setRemaining(Math.max(0, deadline - Date.now()));
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [endsAt]);
+  }, [endsInMs]);
 
   const h = Math.floor(remaining / 3600_000);
   const m = Math.floor((remaining % 3600_000) / 60_000);
@@ -49,6 +33,9 @@ function Countdown({ endsAt }: { endsAt: Date }) {
 
 export default function AuctionsPage() {
   const [bidValues, setBidValues] = useState<Record<string, string>>({});
+  // Static demo auctions — end times stay relative (endsInMs) so the Countdown
+  // can resolve the real deadline client-side without a hydration mismatch.
+  const auctions = demoAuctions();
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6 space-y-5">
@@ -63,7 +50,7 @@ export default function AuctionsPage() {
       </div>
 
       <div className="space-y-4">
-        {MOCK_AUCTIONS.map((a) => (
+        {auctions.map((a) => (
           <div
             key={a.id}
             className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)]"
@@ -103,7 +90,7 @@ export default function AuctionsPage() {
 
               <div className="text-center space-y-0.5">
                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>Ends in</p>
-                <Countdown endsAt={a.endsAt} />
+                <Countdown endsInMs={a.endsInMs} />
                 <p className="text-[10px]" style={{ color: "var(--text-hint)" }}>Anti-snipe: +60s on late bid</p>
               </div>
 

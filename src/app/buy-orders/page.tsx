@@ -6,18 +6,14 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PipDisplay } from "@/components/ui/PipDisplay";
 import { type SkinSearchFilters } from "@/lib/search-params";
-
-const MOCK_ORDERS = [
-  { id: "1", skinName: "Gamma Doppler", weapon: "Karambit", phase: "Emerald", floatMax: 0.01, seeds: [412, 189, 712], pricePips: 120000000n, filled: 0, status: "OPEN" },
-  { id: "2", skinName: "Case Hardened", weapon: "AK-47", phase: null, floatMax: 0.5, seeds: [661, 4, 44, 955], pricePips: 400000000n, filled: 0, status: "OPEN" },
-  { id: "3", skinName: "Doppler", weapon: "Bayonet", phase: "Sapphire", floatMax: 0.02, seeds: [], pricePips: 75000000n, filled: 1, status: "PARTIAL" },
-];
+import { demoBuyOrders } from "@/lib/demo-data";
 
 export default function BuyOrdersPage() {
   const [tab, setTab] = useState<"browse" | "mine">("browse");
   const [showCreate, setShowCreate] = useState(false);
   const [seedInput, setSeedInput] = useState("");
   const [seeds, setSeeds] = useState<number[]>([]);
+  const orders = demoBuyOrders();
 
   function addSeeds() {
     const parsed = seedInput.split(/[\s,;]+/).map(Number).filter((n) => !isNaN(n) && n >= 0 && n <= 1000);
@@ -104,7 +100,7 @@ export default function BuyOrdersPage() {
       <SearchBar onSearch={(f: SkinSearchFilters) => console.log(f)} showAdvanced />
 
       <div className="space-y-3">
-        {MOCK_ORDERS.map((order) => (
+        {orders.map((order) => (
           <div key={order.id} className="flex items-center gap-4 rounded-[var(--radius-lg)] border border-[var(--border)] px-5 py-4" style={{ background: "var(--bg-surface)" }}>
             <div className="flex-1">
               <div className="flex items-center gap-2">
@@ -113,7 +109,7 @@ export default function BuyOrdersPage() {
                 <Badge variant={order.status === "OPEN" ? "gain" : "warn"} className="text-[10px]">{order.status}</Badge>
               </div>
               <div className="mt-1 flex items-center gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                <span>Float ≤ {order.floatMax.toFixed(3)}</span>
+                {order.floatMax != null && <span>Float ≤ {order.floatMax.toFixed(3)}</span>}
                 {order.seeds.length > 0 && <span>{order.seeds.length} seed{order.seeds.length > 1 ? "s" : ""}: {order.seeds.slice(0, 3).map((s) => `#${s}`).join(", ")}{order.seeds.length > 3 ? " …" : ""}</span>}
               </div>
             </div>

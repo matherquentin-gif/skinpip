@@ -53,3 +53,13 @@ export function feeFromPips(pips: Pips, feeBps: number): Pips {
 export const FEE_BPS_FLAT = 200;
 export const FEE_BPS_MAKER = 100;
 export const FEE_BPS_TAKER = 200;
+
+/** What the seller nets after the marketplace fee. */
+export function sellerNetPips(pricePips: Pips, feeBps: number = FEE_BPS_FLAT): Pips {
+  return pricePips - feeFromPips(pricePips, feeBps);
+}
+
+/** Net-of-fee USD string, e.g. "$1,222.46". */
+export function sellerNetUSD(pricePips: Pips, feeBps: number = FEE_BPS_FLAT): string {
+  return pipsToUSD(sellerNetPips(pricePips, feeBps));
+}

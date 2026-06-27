@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Badge } from "./ui/Badge";
 import { PipDisplay } from "./ui/PipDisplay";
-import { type Pips } from "@/lib/pips";
+import { sellerNetUSD, type Pips } from "@/lib/pips";
 import { clsx } from "clsx";
 
 export interface SkinCardData {
@@ -18,7 +18,14 @@ export interface SkinCardData {
   isSouvenir: boolean;
   pricePips: Pips;
   changePercent?: number;
+  liquidity?: number;
   stickers?: { name: string; imageUrl?: string }[];
+}
+
+function liquidityColor(score: number): string {
+  if (score >= 66) return "var(--gain)";
+  if (score >= 33) return "var(--warn)";
+  return "var(--loss)";
 }
 
 interface SkinCardProps {
@@ -100,14 +107,31 @@ export function SkinCard({ item, className }: SkinCardProps) {
           )}
 
           <div className="flex items-end justify-between pt-1">
-            <PipDisplay pips={item.pricePips} size="md" />
-            {item.changePercent !== undefined && (
-              <span
-                className={clsx("text-xs font-medium", isGain ? "gain" : isLoss ? "loss" : "text-[var(--text-muted)]")}
-              >
-                {isGain ? "+" : ""}{item.changePercent.toFixed(1)}%
-              </span>
-            )}
+            <div>
+              <PipDisplay pips={item.pricePips} size="md" />
+              <p className="mt-0.5 text-[10px]" style={{ color: "var(--text-hint)" }}>
+                nets {sellerNetUSD(item.pricePips)} after 2%
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              {item.changePercent !== undefined && (
+                <span
+                  className={clsx("text-xs font-medium", isGain ? "gain" : isLoss ? "loss" : "text-[var(--text-muted)]")}
+                >
+                  {isGain ? "+" : ""}{item.changePercent.toFixed(1)}%
+                </span>
+              )}
+              {item.liquidity !== undefined && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium"
+                  style={{ color: liquidityColor(item.liquidity), background: "var(--bg-elevated)" }}
+                  title="Liquidity score — higher means easier to sell near listed price"
+                >
+                  <span className="size-1.5 rounded-full" style={{ background: liquidityColor(item.liquidity) }} />
+                  LIQ {item.liquidity}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
