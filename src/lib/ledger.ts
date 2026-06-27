@@ -19,19 +19,53 @@ export type PrismaTransactionClient = Prisma.TransactionClient;
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+interface LockedWallet {
+  id: string;
+  balancePips: bigint;
+  reservedPips: bigint;
+}
+
 /**
- * Fetch or create a WalletAccount inside a transaction.
- * Using upsert so callers never need to pre-create the wallet.
+ * Fetch a WalletAccount and acquire a row-level lock for the duration of the
+ * transaction, creating the wallet first if it does not exist.
+ *
+ * The `SELECT … FOR UPDATE` is essential: every ledger mutation does a
+ * read-compute-write (read balance → check invariant → write new balance).
+ * Without the lock, two concurrent transactions both read the same balance,
+ * both pass the invariant check, and the second write clobbers the first —
+ * a classic lost-update that lets a user double-spend their available balance
+ * (e.g. place two buy orders / auction bids that each fully reserve it).
+ *
+ * Postgres serialises the locked rows so the read-compute-write is atomic.
+ * MUST be called inside a Prisma interactive transaction.
  */
-async function getOrCreateWallet(
+async function lockWallet(
   tx: PrismaTransactionClient,
   userId: string
-) {
-  return tx.walletAccount.upsert({
+): Promise<LockedWallet> {
+  // Ensure the row exists. The empty update is a no-op; this never locks.
+  await tx.walletAccount.upsert({
     where: { userId },
     create: { userId, balancePips: 0n, reservedPips: 0n },
     update: {},
   });
+
+  // Acquire the actual row lock and read the authoritative, committed values.
+  const rows = await tx.$queryRaw<
+    Array<{ id: string; balancePips: bigint; reservedPips: bigint }>
+  >`SELECT "id", "balancePips", "reservedPips" FROM "WalletAccount" WHERE "userId" = ${userId} FOR UPDATE`;
+
+  const row = rows[0];
+  if (!row) {
+    throw new Error(`ledger: wallet for user ${userId} not found after upsert`);
+  }
+
+  // BIGINT columns may arrive as string or bigint depending on the driver.
+  return {
+    id: row.id,
+    balancePips: BigInt(row.balancePips),
+    reservedPips: BigInt(row.reservedPips),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -70,10 +104,9 @@ export async function postEntry(
     throw new Error("ledger: amountPips must be non-zero");
   }
 
-  // Lock the wallet row for the duration of the transaction.
-  // Prisma does not expose SELECT FOR UPDATE, so we use updateMany with a
-  // conditional that always passes (add 0) to obtain a row-level lock in PG.
-  const wallet = await getOrCreateWallet(tx, userId);
+  // Lock the wallet row so this read-compute-write is atomic against
+  // concurrent ledger mutations (see lockWallet).
+  const wallet = await lockWallet(tx, userId);
 
   const newBalance = wallet.balancePips + amountPips;
 
@@ -178,7 +211,7 @@ export async function reservePips(
     throw new Error(`ledger.reservePips: amountPips must be positive, got ${amountPips}`);
   }
 
-  const wallet = await getOrCreateWallet(tx, userId);
+  const wallet = await lockWallet(tx, userId);
   const available = wallet.balancePips - wallet.reservedPips;
 
   if (available < amountPips) {
@@ -225,11 +258,7 @@ export async function releasePips(
     throw new Error(`ledger.releasePips: amountPips must be positive, got ${amountPips}`);
   }
 
-  const wallet = await tx.walletAccount.findUnique({ where: { userId } });
-
-  if (!wallet) {
-    throw new Error(`ledger.releasePips: no wallet found for user ${userId}`);
-  }
+  const wallet = await lockWallet(tx, userId);
 
   if (wallet.reservedPips < amountPips) {
     throw new Error(

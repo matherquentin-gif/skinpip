@@ -2,10 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { dollarsToPips } from "@/lib/pips";
+import { centsToPips } from "@/lib/pips";
 
 const DepositSchema = z.object({
-  amountUsd: z.number().min(5).max(10000),
+  // Whole-cent USD amounts only — otherwise the cents charged via Stripe and the
+  // pips credited could round apart. `finite` rejects NaN/Infinity.
+  amountUsd: z
+    .number()
+    .finite()
+    .min(5)
+    .max(10000)
+    .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-9, {
+      message: "amountUsd must have at most 2 decimal places",
+    }),
 });
 
 export async function POST(req: NextRequest) {
@@ -41,9 +50,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const amountPips = dollarsToPips(amountUsd);
-  // Cents for Stripe (1 USD = 100 cents)
+  // Cents for Stripe (1 USD = 100 cents); pips derive from cents so the two can
+  // never disagree.
   const amountCents = Math.round(amountUsd * 100);
+  const amountPips = centsToPips(amountCents);
 
   try {
     // TODO: When Stripe is connected, create a real Stripe PaymentIntent here:
