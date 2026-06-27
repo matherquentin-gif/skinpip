@@ -29,6 +29,7 @@ import {
   demoCandlesForKey,
   demoOrderBook,
   demoAuctions,
+  imageForKey,
   type CatalogEntry,
 } from "../src/lib/demo-data";
 
@@ -161,6 +162,7 @@ async function main() {
           skinName: c.skinName,
           weaponName: c.weaponName,
           wearName: c.wearName,
+          imageUrl: imageForKey(c.key),
           rarity: c.rarity,
           collection: c.collection,
           stickers: (c.stickers ?? []) as unknown as Prisma.InputJsonValue,

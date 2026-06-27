@@ -14,6 +14,7 @@ import {
   demoOrderBook,
   demoRecentSales,
   demoLiquidityScore,
+  imageForKey,
   CATALOG,
 } from "@/lib/demo-data";
 
@@ -54,7 +55,15 @@ export default function ItemPage({ params }: { params: Promise<{ id: string }> }
         <div className="space-y-4">
           <Card padding={false} className="overflow-hidden">
             <div className="flex h-48 items-center justify-center" style={{ background: "var(--bg-input)" }}>
-              <span className="text-xs" style={{ color: "var(--text-hint)" }}>No image</span>
+              {imageForKey(entry.key) ? (
+                <img
+                  src={imageForKey(entry.key)!}
+                  alt={`${entry.weaponName} | ${entry.skinName}`}
+                  className="h-40 w-full object-contain"
+                />
+              ) : (
+                <span className="text-xs" style={{ color: "var(--text-hint)" }}>No image</span>
+              )}
             </div>
             <div className="p-3 space-y-2.5">
               {entry.paintWear != null && (
