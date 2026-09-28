@@ -85,8 +85,8 @@ export interface CatalogEntry {
 }
 
 export const CATALOG: CatalogEntry[] = [
-  { key: "karambit-gamma-emerald-fn", weaponName: "Karambit", skinName: "Gamma Doppler", wearName: "Factory New", category: "knife", paintIndex: 570, paintSeed: 412, paintWear: 0.00834, phaseLabel: "Emerald", patternTierLabel: null, isStatTrak: false, isSouvenir: false, rarity: "Covert", collection: "Gamma", basePips: 124_755_200n, trend: 0.12 },
-  { key: "butterfly-doppler-sapphire-fn", weaponName: "Butterfly Knife", skinName: "Doppler", wearName: "Factory New", category: "knife", paintIndex: 415, paintSeed: 777, paintWear: 0.01245, phaseLabel: "Sapphire", patternTierLabel: null, isStatTrak: true, isSouvenir: false, rarity: "Covert", collection: "Chroma", basePips: 289_500_000n, trend: -0.04 },
+  { key: "karambit-gamma-emerald-fn", weaponName: "Karambit", skinName: "Gamma Doppler", wearName: "Factory New", category: "knife", paintIndex: 568, paintSeed: 412, paintWear: 0.00834, phaseLabel: "Emerald", patternTierLabel: null, isStatTrak: false, isSouvenir: false, rarity: "Covert", collection: "Gamma", basePips: 124_755_200n, trend: 0.12 },
+  { key: "butterfly-doppler-sapphire-fn", weaponName: "Butterfly Knife", skinName: "Doppler", wearName: "Factory New", category: "knife", paintIndex: 416, paintSeed: 777, paintWear: 0.01245, phaseLabel: "Sapphire", patternTierLabel: null, isStatTrak: true, isSouvenir: false, rarity: "Covert", collection: "Chroma", basePips: 289_500_000n, trend: -0.04 },
   { key: "ak-case-hardened-ft-661", weaponName: "AK-47", skinName: "Case Hardened", wearName: "Field-Tested", category: "rifle", paintIndex: 44, paintSeed: 661, paintWear: 0.2331, phaseLabel: null, patternTierLabel: "Blue Gem Tier 1", isStatTrak: false, isSouvenir: false, rarity: "Classified", collection: "Arms Deal", basePips: 450_000_000n, trend: 0.23 },
   { key: "karambit-fade-fn", weaponName: "Karambit", skinName: "Fade", wearName: "Factory New", category: "knife", paintIndex: 38, paintSeed: 100, paintWear: 0.0043, phaseLabel: null, patternTierLabel: "Full Fade", isStatTrak: false, isSouvenir: false, rarity: "Covert", collection: "Knives", basePips: 172_000_000n, trend: 0.05 },
   { key: "awp-dragon-lore-fn", weaponName: "AWP", skinName: "Dragon Lore", wearName: "Factory New", category: "awp", paintIndex: 344, paintSeed: 500, paintWear: 0.0102, phaseLabel: null, patternTierLabel: null, isStatTrak: false, isSouvenir: false, rarity: "Covert", collection: "Cobblestone", basePips: 1_850_000_000n, trend: 0.08 },
@@ -94,7 +94,7 @@ export const CATALOG: CatalogEntry[] = [
   { key: "m4a4-howl-fn", weaponName: "M4A4", skinName: "Howl", wearName: "Factory New", category: "rifle", paintIndex: 309, paintSeed: 210, paintWear: 0.012, phaseLabel: null, patternTierLabel: null, isStatTrak: false, isSouvenir: false, rarity: "Contraband", collection: "Huntsman", basePips: 620_000_000n, trend: 0.31 },
   { key: "ak-redline-ft", weaponName: "AK-47", skinName: "Redline", wearName: "Field-Tested", category: "rifle", paintIndex: 282, paintSeed: 44, paintWear: 0.182, phaseLabel: null, patternTierLabel: null, isStatTrak: false, isSouvenir: false, rarity: "Classified", collection: "Phoenix", basePips: 1_240_000n, trend: -0.03 },
   { key: "ak-redline-ww", weaponName: "AK-47", skinName: "Redline", wearName: "Well-Worn", category: "rifle", paintIndex: 282, paintSeed: 612, paintWear: 0.412, phaseLabel: null, patternTierLabel: null, isStatTrak: false, isSouvenir: false, rarity: "Classified", collection: "Phoenix", basePips: 980_000n, trend: -0.06 },
-  { key: "usp-kill-confirmed-mw", weaponName: "USP-S", skinName: "Kill Confirmed", wearName: "Minimal Wear", category: "pistol", paintIndex: 503, paintSeed: 88, paintWear: 0.103, phaseLabel: null, patternTierLabel: null, isStatTrak: false, isSouvenir: false, rarity: "Covert", collection: "Shadow", basePips: 4_120_000n, trend: 0.01 },
+  { key: "usp-kill-confirmed-mw", weaponName: "USP-S", skinName: "Kill Confirmed", wearName: "Minimal Wear", category: "pistol", paintIndex: 504, paintSeed: 88, paintWear: 0.103, phaseLabel: null, patternTierLabel: null, isStatTrak: false, isSouvenir: false, rarity: "Covert", collection: "Shadow", basePips: 4_120_000n, trend: 0.01 },
   { key: "deagle-blaze-fn", weaponName: "Desert Eagle", skinName: "Blaze", wearName: "Factory New", category: "pistol", paintIndex: 37, paintSeed: 12, paintWear: 0.018, phaseLabel: null, patternTierLabel: null, isStatTrak: false, isSouvenir: false, rarity: "Restricted", collection: "Dust", basePips: 5_300_000n, trend: 0.09 },
   { key: "sport-gloves-pandora-ft", weaponName: "Sport Gloves", skinName: "Pandora's Box", wearName: "Field-Tested", category: "glove", paintIndex: 10037, paintSeed: 333, paintWear: 0.21, phaseLabel: null, patternTierLabel: null, isStatTrak: false, isSouvenir: false, rarity: "Extraordinary", collection: "Gloves", basePips: 198_000_000n, trend: 0.07 },
   { key: "case-bravo", weaponName: "Case", skinName: "Operation Bravo Case", wearName: null, category: "case", paintIndex: null, paintSeed: null, paintWear: null, phaseLabel: null, patternTierLabel: "Discontinued", isStatTrak: false, isSouvenir: false, rarity: "Base Grade", collection: "Bravo", basePips: 8_900_000n, trend: 0.18 },
@@ -374,6 +374,8 @@ export function demoBuyOrders(): DemoBuyOrder[] {
 
 export interface DemoAuction {
   id: string;
+  /** Catalog key of the matching item, for its image. */
+  imageKey: string;
   weapon: string;
   skinName: string;
   phase: string | null;
@@ -389,11 +391,14 @@ export interface DemoAuction {
 
 export function demoAuctions(): DemoAuction[] {
   return [
-    { id: "au-1", weapon: "Karambit", skinName: "Gamma Doppler", phase: "Emerald", wear: "FN", float: 0.00834, currentBidPips: 118_000_000n, startPricePips: 100_000_000n, buyNowPips: 140_000_000n, endsInMs: 3 * 3600_000 + 27 * 60_000, bidCount: 7, isStatTrak: false },
-    { id: "au-2", weapon: "AWP", skinName: "Dragon Lore", phase: null, wear: "FN", float: 0.0102, currentBidPips: 1_835_000_000n, startPricePips: 1_700_000_000n, buyNowPips: null, endsInMs: 22 * 3600_000, bidCount: 14, isStatTrak: false },
-    { id: "au-3", weapon: "Butterfly Knife", skinName: "Doppler", phase: "Sapphire", wear: "FN", float: 0.00211, currentBidPips: 288_000_000n, startPricePips: 250_000_000n, buyNowPips: 320_000_000n, endsInMs: 47 * 60_000, bidCount: 3, isStatTrak: true },
+    { id: "au-1", imageKey: "karambit-gamma-emerald-fn", weapon: "Karambit", skinName: "Gamma Doppler", phase: "Emerald", wear: "Factory New", float: 0.00834, currentBidPips: 118_000_000n, startPricePips: 100_000_000n, buyNowPips: 140_000_000n, endsInMs: 3 * 3600_000 + 27 * 60_000, bidCount: 7, isStatTrak: false },
+    { id: "au-2", imageKey: "awp-dragon-lore-fn", weapon: "AWP", skinName: "Dragon Lore", phase: null, wear: "Factory New", float: 0.0102, currentBidPips: 1_835_000_000n, startPricePips: 1_700_000_000n, buyNowPips: null, endsInMs: 22 * 3600_000, bidCount: 14, isStatTrak: false },
+    { id: "au-3", imageKey: "butterfly-doppler-sapphire-fn", weapon: "Butterfly Knife", skinName: "Doppler", phase: "Sapphire", wear: "Factory New", float: 0.00211, currentBidPips: 288_000_000n, startPricePips: 250_000_000n, buyNowPips: 320_000_000n, endsInMs: 47 * 60_000, bidCount: 3, isStatTrak: true },
   ];
 }
+
+/** Minimum next bid: the current bid plus the default increment (100 pips). */
+export const DEMO_AUCTION_MIN_INCREMENT_PIPS = 100n;
 
 // ── Home page stats ───────────────────────────────────────────────────────
 

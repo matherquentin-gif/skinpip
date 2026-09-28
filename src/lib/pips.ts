@@ -1,9 +1,12 @@
 // Pip = $0.00001 USD. All monetary values are BIGINT pips — never floats.
+// Formatting below uses integer math only, so a price always renders exactly.
 
 export type Pips = bigint;
 
 export const PIPS_PER_DOLLAR = 100_000n;
 export const PIPS_PER_CENT = 1_000n;
+/** Number of decimal places one pip occupies in a USD amount. */
+const PIP_DECIMALS = 5;
 
 export function dollarsToPips(dollars: number): Pips {
   return BigInt(Math.round(dollars * 100_000));
@@ -17,33 +20,76 @@ export function pipsToNumber(pips: Pips): number {
   return Number(pips) / 100_000;
 }
 
-export function pipsToUSD(pips: Pips): string {
-  const dollars = Number(pips) / 100_000;
-  if (dollars < 0.001) {
-    return `$${dollars.toFixed(5)}`;
-  }
-  if (dollars < 1) {
-    return `$${dollars.toFixed(4)}`;
-  }
-  return `$${dollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/**
+ * Parse a user-typed USD amount ("12", "0.00045", "$1,234.5") into pips.
+ * Returns null for anything that isn't a non-negative amount representable in
+ * whole pips (more than 5 decimal places is rejected rather than rounded).
+ */
+export function parseUsdToPips(input: string): Pips | null {
+  const s = input.trim().replace(/^\$/, "").replace(/,/g, "");
+  const m = /^(\d*)(?:\.(\d*))?$/.exec(s);
+  if (!m || (m[1] === "" && !m[2])) return null;
+  const frac = m[2] ?? "";
+  if (frac.length > PIP_DECIMALS) return null;
+  const whole = m[1] === "" ? 0n : BigInt(m[1]);
+  return whole * PIPS_PER_DOLLAR + BigInt(frac.padEnd(PIP_DECIMALS, "0"));
 }
 
+/**
+ * Exact fixed-point rendering of a pip amount with `decimals` places
+ * (0–5), rounding half away from zero. The whole part is comma-grouped.
+ */
+function formatFixed(pips: Pips, decimals: number): { sign: string; whole: string; frac: string } {
+  const neg = pips < 0n;
+  let abs = neg ? -pips : pips;
+  const drop = 10n ** BigInt(PIP_DECIMALS - decimals);
+  if (drop > 1n) abs = (abs + drop / 2n) / drop;
+  const unit = 10n ** BigInt(decimals);
+  const whole = abs / unit;
+  const frac = decimals > 0 ? (abs % unit).toString().padStart(decimals, "0") : "";
+  return { sign: neg && abs !== 0n ? "-" : "", whole: whole.toLocaleString("en-US"), frac };
+}
+
+/** Decimals to show: every pip below $0.01, 4 places below $1, cents above. */
+function displayDecimals(pips: Pips): number {
+  const abs = pips < 0n ? -pips : pips;
+  if (abs < PIPS_PER_CENT) return 5;
+  if (abs < PIPS_PER_DOLLAR) return 4;
+  return 2;
+}
+
+/** "1,247.55", "0.4500", "0.00045" — no currency symbol. */
 export function pipsToDisplay(pips: Pips): string {
-  const dollars = Number(pips) / 100_000;
-  if (dollars < 0.01) {
-    return dollars.toFixed(5);
-  }
-  if (dollars < 1) {
-    return dollars.toFixed(4);
-  }
-  return dollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const { sign, whole, frac } = formatFixed(pips, displayDecimals(pips));
+  return `${sign}${whole}${frac ? `.${frac}` : ""}`;
 }
 
+/** "$1,247.55", "$0.4500", "$0.00045". */
+export function pipsToUSD(pips: Pips): string {
+  const { sign, whole, frac } = formatFixed(pips, displayDecimals(pips));
+  return `${sign}$${whole}${frac ? `.${frac}` : ""}`;
+}
+
+/**
+ * Exact amount for form hints and validation messages, in a form the user can
+ * type back: no grouping, full pip precision, at least 2 decimals
+ * ("1180.001", "0.00045", "12.50").
+ */
+export function pipsToExact(pips: Pips): string {
+  const { sign, frac } = formatFixed(pips, PIP_DECIMALS);
+  const whole = (pips < 0n ? -pips : pips) / PIPS_PER_DOLLAR;
+  return `${sign}${whole}.${frac.replace(/0{1,3}$/, "")}`;
+}
+
+/**
+ * Split for the two-tone price display: `whole` = "$1,247." and `sub` = the
+ * decimals. Shows 4 decimals, or all 5 below $0.01 so sub-cent prices keep
+ * their full pip precision.
+ */
 export function pipsToSplit(pips: Pips): { whole: string; sub: string } {
-  const dollars = Number(pips) / 100_000;
-  const [whole, dec] = dollars.toFixed(4).split(".");
-  const display = `${Number(whole).toLocaleString("en-US")}`;
-  return { whole: `$${display}.`, sub: dec ?? "0000" };
+  const abs = pips < 0n ? -pips : pips;
+  const { sign, whole, frac } = formatFixed(pips, abs < PIPS_PER_CENT ? 5 : 4);
+  return { whole: `${sign}$${whole}.`, sub: frac };
 }
 
 export function feeFromPips(pips: Pips, feeBps: number): Pips {
