@@ -3,15 +3,18 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
-const CreateListingSchema = z.object({
-  itemId: z.string().cuid(),
-  pricePips: z.string().regex(/^\d+$/).transform(BigInt),
-  minimumOfferPips: z
-    .string()
-    .regex(/^\d+$/)
-    .transform(BigInt)
-    .optional(),
-});
+const pipsString = z.string().regex(/^\d{1,18}$/).transform(BigInt);
+
+const CreateListingSchema = z
+  .object({
+    itemId: z.string().cuid(),
+    pricePips: pipsString,
+    minimumOfferPips: pipsString.optional(),
+  })
+  .refine((v) => v.minimumOfferPips == null || v.minimumOfferPips <= v.pricePips, {
+    message: "minimumOfferPips cannot exceed pricePips",
+    path: ["minimumOfferPips"],
+  });
 
 export async function POST(req: NextRequest) {
   // Auth
@@ -38,16 +41,19 @@ export async function POST(req: NextRequest) {
 
   const { itemId, pricePips, minimumOfferPips } = parsed.data;
 
-  // Validate minimum price ($0.01 = 1000 pips)
-  if (pricePips < 1000n) {
+  // Sub-cent pricing is the product: the floor is a single pip ($0.00001).
+  if (pricePips < 1n) {
     return NextResponse.json(
-      { error: "pricePips must be at least 1000 (minimum $0.01)" },
+      { error: "pricePips must be at least 1 (minimum $0.00001)" },
       { status: 422 }
     );
   }
 
   // Look up the item
-  const item = await db.item.findUnique({ where: { id: itemId } });
+  const item = await db.item.findUnique({
+    where: { id: itemId },
+    include: { auctionItem: { select: { status: true } } },
+  });
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
@@ -69,8 +75,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Item must not already be listed
-  if (item.isListed) {
+  // Item must not already be listed or up for auction
+  if (item.isListed || item.auctionItem?.status === "ACTIVE") {
     return NextResponse.json(
       { error: "Item is already listed" },
       { status: 409 }
@@ -82,7 +88,12 @@ export async function POST(req: NextRequest) {
       // Find or create a MarketDefinition for this weapon+skin combo
       // findFirst handles nullable wearName/paintIndex correctly (upsert with null keys fails in Prisma)
       let market = await tx.marketDefinition.findFirst({
-        where: { skinName: item.skinName, wearName: item.wearName, paintIndex: item.paintIndex },
+        where: {
+          weaponName: item.weaponName,
+          skinName: item.skinName,
+          wearName: item.wearName,
+          paintIndex: item.paintIndex,
+        },
       });
       if (!market) {
         market = await tx.marketDefinition.create({

@@ -8,10 +8,12 @@ const BidSchema = z.object({
   bidPips: z.string().regex(/^\d+$/).transform(BigInt),
 });
 
-/** How long before auction end triggers anti-snipe extension, in ms */
-const ANTI_SNIPE_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
-/** How long to extend the auction on an anti-snipe trigger, in ms */
-const ANTI_SNIPE_EXTENSION_MS = 2 * 60 * 1000; // 2 minutes
+/** Thrown inside the transaction to return a specific HTTP error. */
+class BidError extends Error {
+  constructor(message: string, readonly status: number, readonly extra?: object) {
+    super(message);
+  }
+}
 
 export async function POST(
   req: NextRequest,
@@ -43,66 +45,46 @@ export async function POST(
 
   const { bidPips } = parsed.data;
 
-  // Quick pre-flight: check auction exists + is active before entering transaction
-  const auctionCheck = await db.auction.findUnique({
-    where: { id: auctionId },
-  });
-
-  if (!auctionCheck) {
-    return NextResponse.json({ error: "Auction not found" }, { status: 404 });
-  }
-  if (auctionCheck.status !== "ACTIVE") {
-    return NextResponse.json({ error: "Auction is not active" }, { status: 409 });
-  }
-  if (new Date() >= auctionCheck.endsAt) {
-    return NextResponse.json({ error: "Auction has ended" }, { status: 409 });
-  }
-
   try {
     const result = await db.$transaction(async (tx) => {
-      // Re-read inside transaction for race-condition safety
-      const auction = await tx.auction.findUnique({
-        where: { id: auctionId },
-      });
+      // Lock the auction row for the rest of the transaction. Without this,
+      // two concurrent bids both read the same high bid, both release the
+      // previous bidder's reservation (double-releasing it), and the lower
+      // bid can overwrite the higher one.
+      const locked = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "Auction" WHERE "id" = ${auctionId} FOR UPDATE`;
+      if (locked.length === 0) throw new BidError("Auction not found", 404);
 
-      if (!auction) {
-        throw Object.assign(new Error("Auction not found"), { status: 404 });
-      }
-      if (auction.status !== "ACTIVE") {
-        throw Object.assign(new Error("Auction is not active"), { status: 409 });
+      const auction = await tx.auction.findUniqueOrThrow({ where: { id: auctionId } });
+
+      if (auction.status !== "ACTIVE") throw new BidError("Auction is not active", 409);
+      if (auction.sellerId === user.id) {
+        throw new BidError("You can't bid on your own auction", 403);
       }
 
       const now = new Date();
-      if (now >= auction.endsAt) {
-        throw Object.assign(new Error("Auction has ended"), { status: 409 });
+      if (now >= auction.endsAt) throw new BidError("Auction has ended", 409);
+
+      // The first bid may equal the start price; later bids must beat the
+      // current high bid by at least the auction's minimum increment.
+      const minRequired =
+        auction.currentBidPips == null
+          ? auction.startPricePips
+          : auction.currentBidPips + auction.minIncrementPips;
+      if (bidPips < minRequired) {
+        throw new BidError(`Bid must be at least ${minRequired.toString()} pips`, 422, {
+          currentHighBid: (auction.currentBidPips ?? auction.startPricePips).toString(),
+          minRequired: minRequired.toString(),
+        });
       }
 
-      // Derive current high bid: currentBidPips from auction, or startPricePips as the floor
-      const currentHighBid = auction.currentBidPips ?? auction.startPricePips;
-
-      // Minimum bid: strictly greater than currentHighBid + 100 pips (the minimum increment)
-      // (The task says bidPips > currentHighBid + 100n)
-      const minRequired = currentHighBid + 100n;
-      if (bidPips <= currentHighBid || bidPips < minRequired) {
-        throw Object.assign(
-          new Error(
-            `Bid must be at least ${minRequired.toString()} pips (current high: ${currentHighBid.toString()})`
-          ),
-          {
-            status: 422,
-            extra: {
-              currentHighBid: currentHighBid.toString(),
-              minRequired: minRequired.toString(),
-            },
-          }
-        );
-      }
-
-      // Anti-snipe: if bid is within 2 minutes of endsAt, extend by 2 minutes
+      // Anti-snipe: a bid inside the final window pushes the end out so
+      // there is always at least `antiSnipeSeconds` left to respond.
+      const antiSnipeMs = auction.antiSnipeSeconds * 1000;
       const msLeft = auction.endsAt.getTime() - now.getTime();
-      const antiSnipeExtended = msLeft < ANTI_SNIPE_WINDOW_MS;
+      const antiSnipeExtended = msLeft < antiSnipeMs;
       const newEndsAt = antiSnipeExtended
-        ? new Date(now.getTime() + ANTI_SNIPE_EXTENSION_MS)
+        ? new Date(now.getTime() + antiSnipeMs)
         : auction.endsAt;
 
       // Find the previous highest bid to release their reservation
@@ -178,16 +160,15 @@ export async function POST(
       { status: 201 }
     );
   } catch (err: unknown) {
-    // Re-throw NextResponse (auth errors propagated as thrown responses)
-    if (err instanceof NextResponse) return err;
-
-    // Structured errors thrown inside the transaction
-    const e = err as { message?: string; status?: number; extra?: object };
-    if (e.status) {
+    if (err instanceof BidError) {
       return NextResponse.json(
-        { error: e.message ?? "Bad request", ...(e.extra ?? {}) },
-        { status: e.status }
+        { error: err.message, ...(err.extra ?? {}) },
+        { status: err.status }
       );
+    }
+    // The ledger throws when the bidder can't cover the new reservation.
+    if (err instanceof Error && err.message.startsWith("ledger.reservePips: insufficient")) {
+      return NextResponse.json({ error: "Insufficient available balance" }, { status: 422 });
     }
 
     console.error("[POST /api/auctions/[id]/bid]", err);

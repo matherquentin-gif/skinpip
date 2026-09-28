@@ -202,7 +202,9 @@ model MarketDefinition {
   priceTicks   PriceTick[]
   priceCandles PriceCandle[]
 
-  @@unique([skinName, wearName, paintIndex])
+  // weaponName is part of the identity: a Karambit and a Butterfly Knife can
+  // share a finish ("Doppler"), wear, and paint index but are separate markets.
+  @@unique([weaponName, skinName, wearName, paintIndex])
   @@index([skinName])
 }
 

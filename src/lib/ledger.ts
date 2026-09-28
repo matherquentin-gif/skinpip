@@ -98,7 +98,8 @@ export async function postEntry(
   tx: PrismaTransactionClient,
   params: PostEntryParams
 ): Promise<void> {
-  const { userId, amountPips, entryType, refId, refType, note } = params;
+  // `note` isn't persisted yet: LedgerEntry has no column for it.
+  const { userId, amountPips, entryType, refId, refType } = params;
 
   if (amountPips === 0n) {
     throw new Error("ledger: amountPips must be non-zero");
@@ -138,8 +139,6 @@ export async function postEntry(
       type: entryType,
       referenceId: refId ?? null,
       referenceType: refType ?? null,
-      // `note` is not a field in the generated schema; stored in referenceType
-      // or omitted — keep this comment so future migrations can add it.
     },
   });
 }

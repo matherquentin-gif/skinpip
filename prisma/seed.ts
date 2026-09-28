@@ -286,7 +286,8 @@ async function main() {
         isStatTrak: a.isStatTrak,
         skinName: a.skinName,
         weaponName: a.weapon,
-        wearName: a.wear === "FN" ? "Factory New" : a.wear,
+        wearName: a.wear,
+        imageUrl: imageForKey(a.imageKey),
         settlementType: "BOT_CUSTODY",
         isListed: true,
       },
@@ -304,13 +305,35 @@ async function main() {
       },
     });
     auctionCount++;
-    // A couple of bids climbing to the current bid.
-    for (let b = 0; b < Math.min(3, a.bidCount); b++) {
-      const bidder = users[(ai + b + 1) % users.length];
-      const amount = a.startPricePips + ((a.currentBidPips - a.startPricePips) * BigInt(b + 1)) / 3n;
+    // A couple of bids climbing to the current bid. Bidders are never the
+    // seller (the bid API forbids self-bidding).
+    const bidders = users.filter((u) => u.id !== seller.id);
+    const bidRounds = Math.min(3, a.bidCount);
+    for (let b = 0; b < bidRounds; b++) {
+      const bidder = bidders[(ai + b) % bidders.length];
+      const amount = a.startPricePips + ((a.currentBidPips - a.startPricePips) * BigInt(b + 1)) / BigInt(bidRounds);
       await db.bid.create({
         data: { auctionId: auction.id, bidderId: bidder.id, amountPips: amount },
       });
+      // The live high bid holds a wallet reservation, exactly as the bid API
+      // leaves it. Without this, the next real bid fails when it tries to
+      // release the outbid bidder's reservation.
+      if (b === bidRounds - 1) {
+        const wallet = await db.walletAccount.update({
+          where: { userId: bidder.id },
+          data: { reservedPips: { increment: amount } },
+        });
+        await db.ledgerEntry.create({
+          data: {
+            walletAccountId: wallet.id,
+            amountPips: 0n,
+            balanceAfterPips: wallet.balancePips,
+            type: "AUCTION_BID",
+            referenceId: auction.id,
+            referenceType: "Auction",
+          },
+        });
+      }
     }
   }
 

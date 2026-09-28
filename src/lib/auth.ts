@@ -12,6 +12,7 @@
  */
 
 import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import type { User } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -47,13 +48,6 @@ function getSigningKey(): Uint8Array {
 
 /**
  * Create a signed session JWT for the given userId.
- * Returns the compact JWT string synchronously by wrapping the async SignJWT.
- *
- * NOTE: This function is intentionally made sync-compatible by callers — but
- * jose's sign() is async, so use `await createSessionTokenAsync()` internally
- * and expose a thin sync wrapper only where the runtime allows it.
- *
- * In Next.js Route Handlers (all async), use await.
  */
 export async function createSessionToken(userId: string): Promise<string> {
   const key = getSigningKey();
@@ -124,18 +118,40 @@ export function clearSessionCookie(res: NextResponse): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Extract and verify the session token from the incoming request.
- * Returns the User row, or null if the session is absent or invalid.
+ * Resolve a session token to an active (non-banned) User, or null.
  */
-export async function getUser(req: NextRequest): Promise<User | null> {
-  const token = req.cookies.get(SESSION_COOKIE)?.value;
+async function userFromToken(token: string | undefined): Promise<User | null> {
   if (!token) return null;
 
   const payload = await verifySessionToken(token);
   if (!payload) return null;
 
   const user = await db.user.findUnique({ where: { id: payload.userId } });
-  return user ?? null;
+  // A banned user's existing sessions stop working immediately.
+  if (!user || user.isBanned) return null;
+  return user;
+}
+
+/**
+ * Extract and verify the session token from the incoming request.
+ * Returns the User row, or null if the session is absent, invalid, or banned.
+ */
+export async function getUser(req: NextRequest): Promise<User | null> {
+  return userFromToken(req.cookies.get(SESSION_COOKIE)?.value);
+}
+
+/**
+ * Server Component variant of getUser(): reads the session cookie via
+ * next/headers. Returns null when signed out or when the DB is unreachable.
+ */
+export async function getSessionUser(): Promise<User | null> {
+  const cookieStore = await cookies();
+  try {
+    return await userFromToken(cookieStore.get(SESSION_COOKIE)?.value);
+  } catch (err) {
+    console.warn("[auth] session lookup failed:", (err as Error).message);
+    return null;
+  }
 }
 
 /**
@@ -158,9 +174,8 @@ export async function getUser(req: NextRequest): Promise<User | null> {
 export async function requireUser(req: NextRequest): Promise<User> {
   const user = await getUser(req);
   if (!user) {
-    // Throwing a NextResponse is intentional — callers catch it at the handler
+    // Throwing a NextResponse is intentional: callers catch it at the handler
     // boundary and return it directly.
-    // eslint-disable-next-line @typescript-eslint/no-throw-literal
     throw NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   return user;
