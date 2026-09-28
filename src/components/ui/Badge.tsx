@@ -1,4 +1,3 @@
-"use client";
 import { clsx } from "clsx";
 
 type Variant = "accent" | "muted" | "gain" | "loss" | "warn" | "phase";

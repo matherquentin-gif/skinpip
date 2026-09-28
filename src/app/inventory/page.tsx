@@ -1,9 +1,9 @@
-import { cookies } from "next/headers";
-import { Button } from "@/components/ui/Button";
+import type { Metadata } from "next";
+import { Button, buttonClasses } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PipDisplay } from "@/components/ui/PipDisplay";
 import { pipsToUSD } from "@/lib/pips";
-import { verifySessionToken } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getBalance } from "@/lib/ledger";
 
@@ -16,12 +16,15 @@ async function getInventoryData(userId: string) {
   return { items, listings, balance };
 }
 
-export default async function InventoryPage() {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get("sp_session")?.value;
-  const session = sessionToken ? await verifySessionToken(sessionToken) : null;
+export const metadata: Metadata = {
+  title: "Inventory",
+  robots: { index: false },
+};
 
-  if (!session) {
+export default async function InventoryPage() {
+  const user = await getSessionUser();
+
+  if (!user) {
     return (
       <div className="mx-auto max-w-[1400px] px-4 py-6">
         <Card>
@@ -43,8 +46,8 @@ export default async function InventoryPage() {
                 Connect your Steam account to deposit skins, manage listings, and trade.
               </p>
             </div>
-            <a href="/api/auth/steam">
-              <Button variant="primary" size="lg">Sign in with Steam</Button>
+            <a href="/api/auth/steam" className={buttonClasses({ variant: "primary", size: "lg" })}>
+              Sign in with Steam
             </a>
           </div>
         </Card>
@@ -52,7 +55,7 @@ export default async function InventoryPage() {
     );
   }
 
-  const { items, listings, balance } = await getInventoryData(session.userId);
+  const { items, listings, balance } = await getInventoryData(user.id);
 
   const stats = [
     { label: "In custody", value: String(items), sub: "items with SkinPip" },
@@ -63,7 +66,7 @@ export default async function InventoryPage() {
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6 space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
           Inventory
         </h1>
@@ -73,7 +76,7 @@ export default async function InventoryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {stats.map((s) => (
           <Card key={s.label}>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>{s.label}</p>
@@ -112,7 +115,7 @@ export default async function InventoryPage() {
 
       <Card>
         <p className="mb-4 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Wallet</p>
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>Total balance</p>
             <PipDisplay pips={balance.balancePips} size="xl" />
@@ -122,7 +125,7 @@ export default async function InventoryPage() {
             <PipDisplay pips={balance.availablePips} size="lg" />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Deposit</p>
             <div className="flex gap-2">
