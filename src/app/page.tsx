@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { buttonClasses } from "@/components/ui/Button";
 import { db } from "@/lib/db";
 import { demoHomeStats } from "@/lib/demo-data";
 
-export const dynamic = "force-dynamic";
+// Stats are cheap to be a minute stale; this avoids two DB queries per visit.
+export const revalidate = 60;
 
 async function getStats() {
   try {
@@ -41,7 +43,7 @@ const FEATURES = [
       </svg>
     ),
     title: "Sub-cent pip pricing",
-    desc: "Trade at $0.00001 precision. Steam's $0.03 floor is a fee artifact — SkinPip settles internally.",
+    desc: "Trade at $0.00001 precision. Steam's $0.03 floor is a fee artifact; SkinPip settles internally.",
   },
   {
     icon: (
@@ -100,7 +102,7 @@ const FEATURES = [
 export default async function Home() {
   const STATS = await getStats();
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-12 space-y-16">
+    <div className="mx-auto max-w-[1400px] space-y-12 px-4 py-10 sm:space-y-16 sm:py-12">
       <section className="text-center space-y-6 py-8">
         <div
           className="mx-auto inline-flex items-center gap-2 rounded-full border border-[var(--border)] px-4 py-1.5 text-xs"
@@ -109,40 +111,33 @@ export default async function Home() {
           <span className="size-1.5 rounded-full animate-pulse" style={{ background: "var(--accent)" }} />
           <span style={{ color: "var(--text-muted)" }}>US marketplace · pip precision · sub-cent pricing</span>
         </div>
-        <h1 className="text-4xl font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl" style={{ color: "var(--text-primary)" }}>
           Trade CS2 skins below<br />
           <span style={{ color: "var(--accent)" }}>Steam&apos;s $0.03 floor</span>
         </h1>
         <p className="mx-auto max-w-xl text-base leading-relaxed" style={{ color: "var(--text-muted)" }}>
-          SkinPip settles all internal trades on a pip ledger — 1 pip = $0.00001.
+          SkinPip settles all internal trades on a pip ledger, where 1 pip = $0.00001.
           Steam fees only apply when you physically deposit or withdraw a skin.
         </p>
-        <div className="flex justify-center gap-3">
-          <Link
-            href="/market"
-            className="inline-flex items-center gap-2 rounded-[var(--radius-md)] px-5 py-2.5 text-sm font-medium transition-colors"
-            style={{ background: "var(--accent)", color: "#06231A" }}
-          >
+        <div className="flex flex-col justify-center gap-3 sm:flex-row">
+          <Link href="/market" className={buttonClasses({ variant: "primary", size: "lg" }, "text-sm")}>
             Browse market
           </Link>
-          <Link
-            href="/api/auth/steam"
-            className="inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] px-5 py-2.5 text-sm font-medium transition-colors hover:border-[var(--accent)]"
-            style={{ background: "var(--bg-surface)", color: "var(--text-primary)" }}
-          >
+          {/* Plain <a>: an API route that redirects to Steam, not a page. */}
+          <a href="/api/auth/steam" className={buttonClasses({ variant: "secondary", size: "lg" }, "text-sm")}>
             Sign in with Steam
-          </Link>
+          </a>
         </div>
       </section>
 
-      <section className="grid grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4" aria-label="Marketplace stats">
         {STATS.map((s) => (
           <div
             key={s.label}
             className="rounded-[var(--radius-lg)] border border-[var(--border)] p-4 text-center"
             style={{ background: "var(--bg-surface)" }}
           >
-            <p className="font-mono text-2xl font-semibold" style={{ color: "var(--accent)" }}>{s.value}</p>
+            <p className="font-mono text-xl font-semibold sm:text-2xl" style={{ color: "var(--accent)" }}>{s.value}</p>
             <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{s.label}</p>
           </div>
         ))}
@@ -164,7 +159,7 @@ export default async function Home() {
         <h2 className="mb-6 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
           Why SkinPip
         </h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
             <div
               key={f.title}
@@ -192,13 +187,9 @@ export default async function Home() {
         <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
           Connect your Steam account and start buying or listing skins at true market value.
         </p>
-        <Link
-          href="/api/auth/steam"
-          className="mt-6 inline-flex items-center gap-2 rounded-[var(--radius-md)] px-6 py-2.5 text-sm font-medium"
-          style={{ background: "var(--accent)", color: "#06231A" }}
-        >
+        <a href="/api/auth/steam" className={buttonClasses({ variant: "primary", size: "lg" }, "mt-6 text-sm")}>
           Get started with Steam
-        </Link>
+        </a>
       </section>
     </div>
   );

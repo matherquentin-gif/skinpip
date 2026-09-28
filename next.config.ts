@@ -23,7 +23,9 @@ const csp = [
   `base-uri 'self'`,
   `form-action 'self' https://steamcommunity.com`,
   `frame-ancestors 'none'`,
-  `upgrade-insecure-requests`,
+  // Production only: Safari applies this to http://localhost too, which
+  // breaks every subresource in local dev.
+  ...(isDev ? [] : [`upgrade-insecure-requests`]),
 ].join("; ");
 
 // Static security headers applied to every response.

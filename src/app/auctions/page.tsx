@@ -3,7 +3,9 @@ import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PipDisplay } from "@/components/ui/PipDisplay";
-import { demoAuctions } from "@/lib/demo-data";
+import { SkinImage } from "@/components/SkinImage";
+import { demoAuctions, imageForKey, DEMO_AUCTION_MIN_INCREMENT_PIPS } from "@/lib/demo-data";
+import { parseUsdToPips, pipsToExact, pipsToUSD } from "@/lib/pips";
 
 function Countdown({ endsInMs }: { endsInMs: number }) {
   // Initialise from the static relative duration so the server-rendered HTML
@@ -14,7 +16,6 @@ function Countdown({ endsInMs }: { endsInMs: number }) {
   useEffect(() => {
     const deadline = Date.now() + endsInMs;
     const tick = () => setRemaining(Math.max(0, deadline - Date.now()));
-    tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [endsInMs]);
@@ -24,8 +25,13 @@ function Countdown({ endsInMs }: { endsInMs: number }) {
   const s = Math.floor((remaining % 60_000) / 1000);
   const isUrgent = remaining < 5 * 60_000;
 
+  if (remaining === 0) {
+    return <span className="font-mono text-sm text-[var(--text-muted)]">Ended</span>;
+  }
+
   return (
-    <span className={`font-mono text-sm ${isUrgent ? "loss animate-pulse" : "text-[var(--text-primary)]"}`}>
+    // Read by screen readers once, not every second.
+    <span className={`font-mono text-sm ${isUrgent ? "loss motion-safe:animate-pulse" : "text-[var(--text-primary)]"}`}>
       {h > 0 ? `${h}h ` : ""}{m.toString().padStart(2, "0")}m {s.toString().padStart(2, "0")}s
     </span>
   );
@@ -33,13 +39,13 @@ function Countdown({ endsInMs }: { endsInMs: number }) {
 
 export default function AuctionsPage() {
   const [bidValues, setBidValues] = useState<Record<string, string>>({});
-  // Static demo auctions — end times stay relative (endsInMs) so the Countdown
+  // Static demo auctions: end times stay relative (endsInMs) so the Countdown
   // can resolve the real deadline client-side without a hydration mismatch.
   const auctions = demoAuctions();
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-[1400px] space-y-5 px-4 py-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Auctions</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -49,71 +55,102 @@ export default function AuctionsPage() {
         <Button variant="primary">List item for auction</Button>
       </div>
 
-      <div className="space-y-4">
-        {auctions.map((a) => (
-          <div
-            key={a.id}
-            className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)]"
-            style={{ background: "var(--bg-surface)" }}
-          >
-            <div className="flex items-center gap-5 p-5">
-              <div
-                className="flex h-24 w-24 shrink-0 items-center justify-center rounded-[var(--radius-md)]"
-                style={{ background: "var(--bg-input)" }}
-              >
-                <span className="text-2xl" aria-label="knife">🔪</span>
-              </div>
+      <ul className="space-y-4">
+        {auctions.map((a) => {
+          const title = `${a.weapon} | ${a.skinName}`;
+          const minBid = a.currentBidPips + DEMO_AUCTION_MIN_INCREMENT_PIPS;
+          const raw = bidValues[a.id] ?? "";
+          const bidPips = raw.trim() ? parseUsdToPips(raw) : null;
+          const bidError =
+            raw.trim() === "" ? null
+            : bidPips === null ? "Enter a dollar amount"
+            : bidPips < minBid ? `Minimum bid is $${pipsToExact(minBid)}`
+            : null;
+          const inputId = `bid-${a.id}`;
 
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-medium" style={{ color: "var(--text-primary)" }}>
-                    {a.weapon} | {a.skinName}
-                  </h2>
-                  {a.phase && <Badge variant="phase">{a.phase}</Badge>}
-                  {a.isStatTrak && <Badge variant="warn">StatTrak™</Badge>}
-                  <Badge variant="muted">{a.wear}</Badge>
+          return (
+            <li
+              key={a.id}
+              className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)]"
+              style={{ background: "var(--bg-surface)" }}
+            >
+              <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:gap-5">
+                <div className="flex min-w-0 flex-1 items-center gap-4">
+                  <div
+                    className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[var(--radius-md)] sm:h-24 sm:w-24"
+                    style={{ background: "var(--bg-input)" }}
+                  >
+                    <SkinImage src={imageForKey(a.imageKey)} alt={title} className="h-16 w-full sm:h-20" />
+                  </div>
+
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-base font-medium" style={{ color: "var(--text-primary)" }}>{title}</h2>
+                      {a.phase && <Badge variant="phase">{a.phase}</Badge>}
+                      {a.isStatTrak && <Badge variant="warn">StatTrak™</Badge>}
+                      <Badge variant="muted">{a.wear}</Badge>
+                    </div>
+                    <p className="font-mono text-xs" style={{ color: "var(--text-muted)" }}>
+                      Float: {a.float.toFixed(5)} · {a.bidCount} bids
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
-                  Float: {a.float.toFixed(5)} · {a.bidCount} bids
-                </p>
-              </div>
 
-              <div className="text-center space-y-0.5">
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>Current bid</p>
-                <PipDisplay pips={a.currentBidPips} size="lg" />
-                {a.buyNowPips && (
-                  <p className="text-xs" style={{ color: "var(--text-hint)" }}>
-                    Buy now: <span className="font-mono text-[var(--accent)]">${(Number(a.buyNowPips) / 100000).toFixed(2)}</span>
-                  </p>
-                )}
-              </div>
+                <div className="flex gap-8 lg:gap-5">
+                  <div className="space-y-0.5 lg:text-center">
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>Current bid</p>
+                    <PipDisplay pips={a.currentBidPips} size="lg" />
+                    {a.buyNowPips && (
+                      <p className="text-xs" style={{ color: "var(--text-hint)" }}>
+                        Buy now: <span className="font-mono text-[var(--accent)]">{pipsToUSD(a.buyNowPips)}</span>
+                      </p>
+                    )}
+                  </div>
 
-              <div className="text-center space-y-0.5">
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>Ends in</p>
-                <Countdown endsInMs={a.endsInMs} />
-                <p className="text-[10px]" style={{ color: "var(--text-hint)" }}>Anti-snipe: +60s on late bid</p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5" style={{ background: "var(--bg-input)" }}>
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>$</span>
-                  <input
-                    value={bidValues[a.id] ?? ""}
-                    onChange={(e) => setBidValues((p) => ({ ...p, [a.id]: e.target.value }))}
-                    placeholder={`>${(Number(a.currentBidPips) / 100000).toFixed(4)}`}
-                    className="w-28 bg-transparent font-mono text-sm outline-none"
-                    style={{ color: "var(--text-primary)" }}
-                  />
+                  <div className="space-y-0.5 lg:text-center">
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>Ends in</p>
+                    <Countdown endsInMs={a.endsInMs} />
+                    <p className="text-[10px]" style={{ color: "var(--text-hint)" }}>Anti-snipe: +60s on late bid</p>
+                  </div>
                 </div>
-                <Button variant="primary" size="sm" className="w-full">Place bid</Button>
-                {a.buyNowPips && (
-                  <Button variant="secondary" size="sm" className="w-full">Buy now</Button>
-                )}
+
+                <div className="space-y-2 lg:w-48">
+                  <label htmlFor={inputId} className="sr-only">Your bid for {title} in USD</label>
+                  <div
+                    className="flex items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-1.5 focus-within:border-[var(--border-focus)]"
+                    style={{ background: "var(--bg-input)", borderColor: bidError ? "var(--loss)" : "var(--border)" }}
+                  >
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }} aria-hidden>$</span>
+                    <input
+                      id={inputId}
+                      inputMode="decimal"
+                      autoComplete="off"
+                      value={raw}
+                      onChange={(e) => setBidValues((p) => ({ ...p, [a.id]: e.target.value }))}
+                      placeholder={pipsToExact(minBid)}
+                      aria-invalid={bidError ? true : undefined}
+                      aria-describedby={bidError ? `${inputId}-err` : undefined}
+                      className="w-full min-w-0 bg-transparent font-mono text-sm outline-none"
+                      style={{ color: "var(--text-primary)" }}
+                    />
+                  </div>
+                  {bidError && (
+                    <p id={`${inputId}-err`} className="text-[10px]" style={{ color: "var(--loss)" }}>{bidError}</p>
+                  )}
+                  <div className="flex gap-2 lg:flex-col">
+                    <Button variant="primary" size="sm" className="flex-1 lg:w-full" disabled={bidPips === null || bidError !== null}>
+                      Place bid
+                    </Button>
+                    {a.buyNowPips && (
+                      <Button variant="secondary" size="sm" className="flex-1 lg:w-full">Buy now</Button>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
-      </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

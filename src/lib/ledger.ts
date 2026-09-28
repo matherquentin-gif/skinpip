@@ -68,6 +68,24 @@ async function lockWallet(
   };
 }
 
+/**
+ * Lock several users' wallets up front, always in the same (sorted) order.
+ *
+ * A transaction that touches two wallets must take both locks in a global
+ * order. Otherwise two transactions that each lock one wallet and then wait
+ * for the other's deadlock (e.g. two users outbidding each other on different
+ * auctions at the same moment), and Postgres aborts one of them. Later
+ * ledger calls in the same transaction re-acquire these locks for free.
+ */
+export async function lockWallets(
+  tx: PrismaTransactionClient,
+  userIds: string[]
+): Promise<void> {
+  for (const userId of [...new Set(userIds)].sort()) {
+    await lockWallet(tx, userId);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Core posting function
 // ---------------------------------------------------------------------------
@@ -98,7 +116,8 @@ export async function postEntry(
   tx: PrismaTransactionClient,
   params: PostEntryParams
 ): Promise<void> {
-  const { userId, amountPips, entryType, refId, refType, note } = params;
+  // `note` isn't persisted yet: LedgerEntry has no column for it.
+  const { userId, amountPips, entryType, refId, refType } = params;
 
   if (amountPips === 0n) {
     throw new Error("ledger: amountPips must be non-zero");
@@ -138,8 +157,6 @@ export async function postEntry(
       type: entryType,
       referenceId: refId ?? null,
       referenceType: refType ?? null,
-      // `note` is not a field in the generated schema; stored in referenceType
-      // or omitted — keep this comment so future migrations can add it.
     },
   });
 }

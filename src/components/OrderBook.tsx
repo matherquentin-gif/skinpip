@@ -11,8 +11,8 @@ export interface OrderBookEntry {
 interface OrderBookProps {
   asks: OrderBookEntry[];
   bids: OrderBookEntry[];
-  spreadPips?: Pips;
-  lastTradePips?: Pips;
+  spreadPips?: Pips | null;
+  lastTradePips?: Pips | null;
   className?: string;
 }
 
@@ -71,18 +71,24 @@ export function OrderBook({ asks, bids, spreadPips, lastTradePips, className }: 
         ))}
       </div>
 
-      {spreadPips !== undefined && (
+      {asks.length === 0 && bids.length === 0 && (
+        <p className="px-3 py-6 text-center text-xs text-[var(--text-hint)]">No open orders yet</p>
+      )}
+
+      {(spreadPips != null || lastTradePips != null) && (
         <div
           className="my-0.5 flex items-center justify-between border-y border-[var(--border)] px-3 py-1.5 text-[11px]"
         >
           <span className="text-[var(--text-muted)]">
-            {lastTradePips && (
-              <span className="font-mono text-[var(--text-primary)]">{pipsToDisplay(lastTradePips)}</span>
+            {lastTradePips != null && (
+              <span title="Last trade" className="font-mono text-[var(--text-primary)]">{pipsToDisplay(lastTradePips)}</span>
             )}
           </span>
-          <span className="text-[var(--text-hint)]">
-            Spread <span className="font-mono">{pipsToDisplay(spreadPips)}</span>
-          </span>
+          {spreadPips != null && (
+            <span className="text-[var(--text-hint)]">
+              Spread <span className="font-mono">{pipsToDisplay(spreadPips)}</span>
+            </span>
+          )}
         </div>
       )}
 

@@ -1,20 +1,36 @@
-// paint_index → phase label for Doppler and Gamma Doppler knives
+// paint_index → phase label for Doppler and Gamma Doppler finishes.
+//
+// Verified against the ByMykel/CSGO-API skins dataset. Several finishes have
+// more than one paint index because Valve re-issued them for newer knives
+// (617–619, 852–855) and for the Glock-18 Gamma Doppler (1119–1123).
 
 export const PHASE_MAP: Record<number, string> = {
-  // Karambit / Bayonet / M9 Bayonet / etc. Doppler
-  415: "Phase 1",
-  416: "Phase 2",
-  417: "Phase 3",
-  418: "Phase 4",
-  419: "Ruby",
-  420: "Sapphire",
-  421: "Black Pearl",
+  // Doppler
+  415: "Ruby",
+  416: "Sapphire",
+  417: "Black Pearl",
+  418: "Phase 1",
+  419: "Phase 2",
+  420: "Phase 3",
+  421: "Phase 4",
+  617: "Black Pearl",
+  618: "Phase 2",
+  619: "Sapphire",
+  852: "Phase 1",
+  853: "Phase 2",
+  854: "Phase 3",
+  855: "Phase 4",
   // Gamma Doppler
-  568: "Gamma Phase 1",
-  569: "Gamma Phase 2",
-  570: "Gamma Phase 3",
-  571: "Gamma Phase 4",
-  572: "Emerald",
+  568: "Emerald",
+  569: "Gamma Phase 1",
+  570: "Gamma Phase 2",
+  571: "Gamma Phase 3",
+  572: "Gamma Phase 4",
+  1119: "Emerald",
+  1120: "Gamma Phase 1",
+  1121: "Gamma Phase 2",
+  1122: "Gamma Phase 3",
+  1123: "Gamma Phase 4",
 };
 
 export const DOPPLER_PHASES = ["Phase 1", "Phase 2", "Phase 3", "Phase 4", "Ruby", "Sapphire", "Black Pearl"];

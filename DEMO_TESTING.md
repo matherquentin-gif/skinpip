@@ -1,7 +1,7 @@
 # Testing SkinPip without live data
 
-There are two ways to run the app with realistic data — no Steam inventory and no
-live prices required.
+There are two ways to run the app with realistic data. Neither needs a Steam
+inventory or live prices.
 
 ## 1. Zero-setup demo mode (no database)
 
@@ -15,15 +15,15 @@ npm run dev
 
 Then open the app:
 
-- **/market** — grid of demo skins (incl. genuinely sub-cent items), with
+- **/market**: grid of demo skins (incl. genuinely sub-cent items), with
   net-of-fee pricing and a liquidity badge. A "Demo data" pill appears when the
   API is serving the fallback.
-- **/market/[id]** — per-item page with a working candlestick/line chart, a
+- **/market/[id]**: per-item page with a working candlestick/line chart, a
   populated order book, recent sales, and the spread/net-of-fee display.
-- **/trends** — market-cap dashboard (total cap, 24h volume, composition),
+- **/trends**: market-cap dashboard (total cap, 24h volume, composition),
   category indices with a chart, and top gainers/losers. Toggle 24h / 7d / 30d.
-- **/auctions**, **/buy-orders** — populated from the same demo source.
-- **/** — stat tiles show representative demo figures.
+- **/auctions**, **/buy-orders**: populated from the same demo source.
+- **/**: stat tiles show representative demo figures.
 
 The dataset is defined once in **`src/lib/demo-data.ts`** using a seeded PRNG, so
 the numbers are stable across reloads and identical on server and client (no
@@ -67,12 +67,11 @@ data (the "Demo data" pill disappears and `/api/market` reports `source: "db"`).
 ### Safety
 
 `npm run seed` refuses to run in production unless `SEED_DEMO=1`. It clears the
-marketplace tables and `DEMO_*` users, then rebuilds — it does **not** touch the
+marketplace tables and `DEMO_*` users, then rebuilds. It does **not** touch the
 `PhaseMap` / `PatternTier` reference data. Use a dev database.
 
 ## Notes
 
-- `npm run typecheck` and `npm run build` both pass clean.
-- `npm run lint` currently reports a few warnings plus two **pre-existing**
-  errors unrelated to this work (a renamed `@typescript-eslint/no-throw-literal`
-  rule in `src/lib/auth.ts`, and the `Countdown` timer's `Date.now()` call).
+- `npm run typecheck`, `npm run lint`, `npm test` and `npm run build` all pass clean.
+- Item pages (`/market/[id]`) accept both demo catalog keys and database ids,
+  so the market grid links to the right item in either mode.

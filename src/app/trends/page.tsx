@@ -39,17 +39,19 @@ export default function TrendsPage() {
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6 space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Trends</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
             Total market cap, category indices, and top movers
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--border)] p-0.5" style={{ background: "var(--bg-surface)" }}>
+        <div role="group" aria-label="Timeframe" className="flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--border)] p-0.5" style={{ background: "var(--bg-surface)" }}>
           {([1, 7, 30] as Timeframe[]).map((t) => (
             <button
               key={t}
+              type="button"
+              aria-pressed={tf === t}
               onClick={() => setTf(t)}
               className={`rounded-[var(--radius-sm)] px-3 py-1 text-xs transition-colors ${
                 tf === t ? "bg-[var(--accent-dim)] text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -63,24 +65,24 @@ export default function TrendsPage() {
 
       {/* ── Market cap dashboard ── */}
       <Card>
-        <div className="grid grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
           <div>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>Total market cap</p>
-            <p className="mt-1 font-mono text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+            <p className="mt-1 font-mono text-xl font-semibold sm:text-2xl" style={{ color: "var(--text-primary)" }}>
               {pipsToUSD(cap.totalPips)}
             </p>
             <p className="mt-0.5 text-xs"><Delta value={capChange} /> <span style={{ color: "var(--text-hint)" }}>{TF_LABEL[tf]}</span></p>
           </div>
           <div>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>24h volume</p>
-            <p className="mt-1 font-mono text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+            <p className="mt-1 font-mono text-xl font-semibold sm:text-2xl" style={{ color: "var(--text-primary)" }}>
               {pipsToUSD(cap.volume24hPips)}
             </p>
             <p className="mt-0.5 text-xs" style={{ color: "var(--text-hint)" }}>across all markets</p>
           </div>
           <div>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>Active listings</p>
-            <p className="mt-1 font-mono text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+            <p className="mt-1 font-mono text-xl font-semibold sm:text-2xl" style={{ color: "var(--text-primary)" }}>
               {cap.activeListings.toLocaleString()}
             </p>
             <p className="mt-0.5 text-xs" style={{ color: "var(--text-hint)" }}>live now</p>
@@ -104,9 +106,9 @@ export default function TrendsPage() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* ── Indices + chart ── */}
-        <div className="col-span-2 space-y-5">
+        <div className="min-w-0 space-y-5 lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle>{indices[selectedIndex].name}</CardTitle>
@@ -127,6 +129,8 @@ export default function TrendsPage() {
               {indices.map((idx, i) => (
                 <button
                   key={idx.key}
+                  type="button"
+                  aria-pressed={i === selectedIndex}
                   onClick={() => setSelectedIndex(i)}
                   className={`flex w-full items-center justify-between rounded-[var(--radius-sm)] px-3 py-2 text-left transition-colors ${
                     i === selectedIndex ? "bg-[var(--accent-dim)]" : "hover:bg-[var(--bg-elevated)]"

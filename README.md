@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SkinPip
 
-## Getting Started
+A CS2 skin marketplace with sub-cent "pip" pricing (1 pip = $0.00001). Trades
+settle on an internal double-entry ledger, so prices aren't bound by Steam's
+$0.03 floor.
 
-First, run the development server:
+Built with Next.js 16 (App Router), React 19, Prisma 7 on Postgres (Neon),
+Tailwind CSS 4, and Steam OpenID for sign-in.
+
+## Quick start (no database)
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. With no database configured, every page falls back
+to a deterministic demo dataset (see [DEMO_TESTING.md](DEMO_TESTING.md)).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## With a database
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. `cp .env.example .env.local` and fill in the values.
+2. `npm run db:push` to create the schema (there are no migrations yet).
+3. `npm run seed` to load demo users, markets, listings, order books, price
+   history and auctions.
 
-## Learn More
+`npm run db:reset` does both steps 2 and 3 from scratch.
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Script              | What it does                                   |
+| ------------------- | ---------------------------------------------- |
+| `npm run dev`       | Start the dev server                           |
+| `npm run build`     | Generate the Prisma client and build           |
+| `npm run typecheck` | `tsc --noEmit`                                 |
+| `npm run lint`      | ESLint                                         |
+| `npm test`          | Unit tests (Node test runner via `tsx`)        |
+| `npm run seed`      | Seed demo data (refuses production unless `SEED_DEMO=1`) |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project layout
 
-## Deploy on Vercel
+- `src/app` pages and API routes (`/api/market`, `/api/listings`,
+  `/api/buy-orders`, `/api/auctions/[id]/bid`, `/api/wallet/*`,
+  `/api/auth/*`, `/api/webhooks/stripe`)
+- `src/lib/ledger.ts` wallet ledger (row-locked balance and reservation updates)
+- `src/lib/pips.ts` exact bigint money formatting and parsing
+- `src/lib/demo-data.ts` the demo dataset shared by the UI fallback and the seed
+- `prisma/schema.prisma` data model
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Security notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Never commit credentials. `.env*` files are git-ignored except
+  `.env.example`, and this repository is public.
+- `NEXT_PUBLIC_APP_URL` must match the site's real origin: the Steam login
+  callback rejects assertions whose `return_to` doesn't match it, and a
+  one-time state cookie ties each login to the browser that started it. A
+  login started on any other host (such as a Vercel preview URL) fails.

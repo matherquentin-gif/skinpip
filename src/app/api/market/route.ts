@@ -7,6 +7,7 @@ import {
   CATALOG,
 } from "@/lib/demo-data";
 import type { SkinCardData } from "@/components/SkinCard";
+import { floatParam, intParam, listParam, pipsParam } from "@/lib/query-params";
 
 /**
  * Market listing search.
@@ -31,20 +32,26 @@ interface Filters {
   floatMin?: number;
   floatMax?: number;
   statTrak?: boolean;
+  priceMin?: bigint;
+  priceMax?: bigint;
   sort: string;
 }
 
 function parseFilters(searchParams: URLSearchParams): Filters {
   const statTrakParam = searchParams.get("statTrak");
   return {
-    q: searchParams.get("q") ?? "",
-    seeds:
-      searchParams.get("seeds")?.split(",").map(Number).filter((n) => !isNaN(n)) ?? [],
-    phases: searchParams.get("phases")?.split(",").filter(Boolean) ?? [],
-    wears: searchParams.get("wears")?.split(",").filter(Boolean) ?? [],
-    floatMin: searchParams.get("floatMin") ? parseFloat(searchParams.get("floatMin")!) : undefined,
-    floatMax: searchParams.get("floatMax") ? parseFloat(searchParams.get("floatMax")!) : undefined,
+    q: (searchParams.get("q") ?? "").trim().slice(0, 100),
+    // Paint seeds are integers 0–1000; anything else would make Prisma throw.
+    seeds: listParam(searchParams.get("seeds"))
+      .map(Number)
+      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 1000),
+    phases: listParam(searchParams.get("phases")),
+    wears: listParam(searchParams.get("wears")),
+    floatMin: floatParam(searchParams.get("floatMin"), 0, 1),
+    floatMax: floatParam(searchParams.get("floatMax"), 0, 1),
     statTrak: statTrakParam === "true" ? true : statTrakParam === "false" ? false : undefined,
+    priceMin: pipsParam(searchParams.get("priceMin")),
+    priceMax: pipsParam(searchParams.get("priceMax")),
     sort: searchParams.get("sort") ?? "price_asc",
   };
 }
@@ -83,17 +90,30 @@ function demoResults(f: Filters): SerializedItem[] {
     if (f.statTrak !== undefined && it.isStatTrak !== f.statTrak) return false;
     if (f.floatMin !== undefined && (it.paintWear == null || it.paintWear < f.floatMin)) return false;
     if (f.floatMax !== undefined && (it.paintWear == null || it.paintWear > f.floatMax)) return false;
+    if (f.priceMin !== undefined && BigInt(it.pricePips) < f.priceMin) return false;
+    if (f.priceMax !== undefined && BigInt(it.pricePips) > f.priceMax) return false;
     return true;
   });
 
   return sortItems(items, f.sort);
 }
 
+function demoPage(f: Filters, page: number, limit: number) {
+  const all = demoResults(f);
+  return {
+    items: all.slice((page - 1) * limit, page * limit),
+    total: all.length,
+    page,
+    pages: Math.max(1, Math.ceil(all.length / limit)),
+    source: "demo" as const,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const f = parseFilters(searchParams);
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") ?? "40", 10)), 100);
+  const page = intParam(searchParams.get("page"), 1, 1, 10_000);
+  const limit = intParam(searchParams.get("limit"), 40, 1, 100);
 
   // Map active catalog keys → liquidity for DB rows (best-effort).
   const liquidityByMarket = new Map<string, number>(
@@ -124,7 +144,18 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const where: Prisma.ListingWhereInput = { status: "ACTIVE", item: itemWhere };
+    const where: Prisma.ListingWhereInput = {
+      status: "ACTIVE",
+      item: itemWhere,
+      ...(f.priceMin !== undefined || f.priceMax !== undefined
+        ? {
+            pricePips: {
+              ...(f.priceMin !== undefined ? { gte: f.priceMin } : {}),
+              ...(f.priceMax !== undefined ? { lte: f.priceMax } : {}),
+            },
+          }
+        : {}),
+    };
 
     const orderBy: Prisma.ListingOrderByWithRelationInput =
       f.sort === "price_asc"
@@ -156,10 +187,11 @@ export async function GET(req: NextRequest) {
       db.listing.count({ where }),
     ]);
 
-    // Empty DB → serve the demo dataset so the page is never blank.
-    if (total === 0) {
-      const items = demoResults(f);
-      return NextResponse.json({ items, total: items.length, page, pages: 1, source: "demo" });
+    // Empty marketplace → serve the demo dataset so the page is never blank.
+    // (Only when nothing is listed at all: a filter that matches nothing on
+    // a live DB must return an empty result, not demo items.)
+    if (total === 0 && (await db.listing.count({ where: { status: "ACTIVE" } })) === 0) {
+      return NextResponse.json(demoPage(f, page, limit));
     }
 
     const items: SerializedItem[] = rawListings.map((l) => ({
@@ -182,7 +214,6 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     // No DATABASE_URL / unreachable DB → demo fallback keeps the app usable.
     console.warn("[/api/market] DB unavailable, serving demo data:", (err as Error).message);
-    const items = demoResults(f);
-    return NextResponse.json({ items, total: items.length, page, pages: 1, source: "demo" });
+    return NextResponse.json(demoPage(f, page, limit));
   }
 }

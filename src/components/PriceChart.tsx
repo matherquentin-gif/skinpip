@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
-import type { Time } from "lightweight-charts";
+import type { IChartApi, Time } from "lightweight-charts";
 
 export interface CandleData {
   time: number;
@@ -12,168 +12,179 @@ export interface CandleData {
   volume: number;
 }
 
-type Range = "24h" | "7d" | "30d" | "90d" | "1y" | "all";
+type Range = "7d" | "30d" | "90d" | "1y" | "all";
 
 interface PriceChartProps {
   data: CandleData[];
   className?: string;
-  onRangeChange?: (range: Range) => void;
+  /** Initially selected range. */
+  defaultRange?: Range;
 }
 
-const RANGES: Range[] = ["24h", "7d", "30d", "90d", "1y", "all"];
+const RANGES: { value: Range; label: string; days: number | null }[] = [
+  { value: "7d", label: "7d", days: 7 },
+  { value: "30d", label: "30d", days: 30 },
+  { value: "90d", label: "90d", days: 90 },
+  { value: "1y", label: "1y", days: 365 },
+  { value: "all", label: "All", days: null },
+];
 
-export function PriceChart({ data, className, onRangeChange }: PriceChartProps) {
+const CHART_HEIGHT = 200;
+
+/** Enough decimals that sub-cent prices don't all render as "0.00". */
+function priceFormatFor(maxPrice: number) {
+  if (maxPrice < 0.01) return { type: "price" as const, precision: 5, minMove: 0.00001 };
+  if (maxPrice < 1) return { type: "price" as const, precision: 4, minMove: 0.0001 };
+  return { type: "price" as const, precision: 2, minMove: 0.01 };
+}
+
+/** Read theme tokens so the canvas matches the active (dark or light) theme. */
+function themeColors() {
+  const css = getComputedStyle(document.documentElement);
+  const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+  return {
+    text: v("--text-muted", "#8AA399"),
+    border: v("--border", "#22302B"),
+    surface: v("--bg-surface", "#141E1A"),
+    accent: v("--accent", "#25E59A"),
+    gain: v("--gain", "#25E59A"),
+    loss: v("--loss", "#FF5C61"),
+    // Canvas can't resolve CSS variables, so pass the resolved font stack.
+    font: v("--font-geist-mono", "ui-monospace, monospace"),
+  };
+}
+
+export function PriceChart({ data, className, defaultRange = "30d" }: PriceChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<unknown>(null);
-  const [activeRange, setActiveRange] = useState<Range>("30d");
+  const [range, setRange] = useState<Range>(defaultRange);
   const [chartType, setChartType] = useState<"line" | "candle">("line");
 
+  const visible = useMemo(() => {
+    const days = RANGES.find((r) => r.value === range)?.days;
+    if (!days || data.length === 0) return data;
+    const cutoff = data[data.length - 1].time - days * 86_400;
+    return data.filter((d) => d.time > cutoff);
+  }, [data, range]);
+
   useEffect(() => {
-    let chart: unknown = null;
-    let cleanup = () => {};
+    // The chart library loads asynchronously. If this effect is cleaned up
+    // before it finishes (fast re-render, React Strict Mode), `disposed` stops
+    // the late init from mounting an orphaned second chart.
+    let disposed = false;
+    let chart: IChartApi | null = null;
 
     async function init() {
-      if (!containerRef.current || !data.length) return;
+      const el = containerRef.current;
+      if (!el || !visible.length) return;
 
       const { createChart, ColorType, LineStyle, LineSeries, CandlestickSeries, HistogramSeries } =
         await import("lightweight-charts");
+      if (disposed) return;
 
-      chart = createChart(containerRef.current, {
+      const c = themeColors();
+      const priceFormat = priceFormatFor(Math.max(...visible.map((d) => d.high)));
+
+      chart = createChart(el, {
+        autoSize: true,
+        height: CHART_HEIGHT,
         layout: {
           background: { type: ColorType.Solid, color: "transparent" },
-          textColor: "#8AA399",
-          fontFamily: "var(--font-geist-mono, monospace)",
+          textColor: c.text,
+          fontFamily: c.font,
           fontSize: 11,
         },
         grid: {
-          vertLines: { color: "#22302B", style: LineStyle.Dotted },
-          horzLines: { color: "#22302B", style: LineStyle.Dotted },
+          vertLines: { color: c.border, style: LineStyle.Dotted },
+          horzLines: { color: c.border, style: LineStyle.Dotted },
         },
         crosshair: {
-          vertLine: { color: "#25E59A", labelBackgroundColor: "#141E1A" },
-          horzLine: { color: "#25E59A", labelBackgroundColor: "#141E1A" },
+          vertLine: { color: c.accent, labelBackgroundColor: c.surface },
+          horzLine: { color: c.accent, labelBackgroundColor: c.surface },
         },
-        rightPriceScale: {
-          borderColor: "#22302B",
-        },
-        timeScale: {
-          borderColor: "#22302B",
-          timeVisible: true,
-        },
-        width: containerRef.current.clientWidth,
-        height: 200,
+        rightPriceScale: { borderColor: c.border },
+        timeScale: { borderColor: c.border, timeVisible: true },
       });
-
-      // lightweight-charts v5: series are added via addSeries(SeriesDefinition, options).
-      const c = chart as {
-        addSeries: (def: unknown, opts: unknown) => { setData: (d: unknown) => void; priceScale?: () => { applyOptions: (o: unknown) => void } };
-        priceScale: (id: string) => { applyOptions: (o: unknown) => void };
-        timeScale: () => { fitContent: () => void };
-        resize: (w: number, h: number) => void;
-        remove: () => void;
-      };
 
       if (chartType === "line") {
-        const lineSeries = c.addSeries(LineSeries, {
-          color: "#25E59A",
-          lineWidth: 2,
-          priceLineVisible: false,
-        });
-        lineSeries.setData(data.map((d) => ({ time: d.time as Time, value: d.close })));
+        chart
+          .addSeries(LineSeries, { color: c.accent, lineWidth: 2, priceLineVisible: false, priceFormat })
+          .setData(visible.map((d) => ({ time: d.time as Time, value: d.close })));
       } else {
-        const candleSeries = c.addSeries(CandlestickSeries, {
-          upColor: "#25E59A",
-          downColor: "#FF5C61",
-          borderUpColor: "#25E59A",
-          borderDownColor: "#FF5C61",
-          wickUpColor: "#25E59A",
-          wickDownColor: "#FF5C61",
-        });
-        candleSeries.setData(
-          data.map((d) => ({ time: d.time as Time, open: d.open, high: d.high, low: d.low, close: d.close })),
-        );
+        chart
+          .addSeries(CandlestickSeries, {
+            upColor: c.gain,
+            downColor: c.loss,
+            borderUpColor: c.gain,
+            borderDownColor: c.loss,
+            wickUpColor: c.gain,
+            wickDownColor: c.loss,
+            priceFormat,
+          })
+          .setData(
+            visible.map((d) => ({ time: d.time as Time, open: d.open, high: d.high, low: d.low, close: d.close })),
+          );
       }
 
-      const volSeries = c.addSeries(HistogramSeries, {
-        color: "#1E5A45",
-        priceFormat: { type: "volume" },
-        priceScaleId: "vol",
-      });
-      volSeries.setData(
-        data.map((d) => ({ time: d.time as Time, value: d.volume, color: d.close >= d.open ? "#1E5A45" : "#3A1A1A" })),
-      );
-      c.priceScale("vol").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
-
-      c.timeScale().fitContent();
-
-      const observer = new ResizeObserver(() => {
-        if (containerRef.current) {
-          c.resize(containerRef.current.clientWidth, 200);
-        }
-      });
-      if (containerRef.current) observer.observe(containerRef.current);
-
-      cleanup = () => {
-        observer.disconnect();
-        c.remove();
-      };
+      chart
+        .addSeries(HistogramSeries, { color: "#1E5A45", priceFormat: { type: "volume" }, priceScaleId: "vol" })
+        .setData(
+          visible.map((d) => ({ time: d.time as Time, value: d.volume, color: d.close >= d.open ? "#1E5A45" : "#3A1A1A" })),
+        );
+      chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+      chart.timeScale().fitContent();
     }
 
-    init();
-    return () => cleanup();
-  }, [data, chartType]);
+    init().catch((err) => console.error("[PriceChart] failed to render:", err));
+    return () => {
+      disposed = true;
+      chart?.remove();
+    };
+  }, [visible, chartType]);
 
-  function handleRange(r: Range) {
-    setActiveRange(r);
-    onRangeChange?.(r);
-  }
+  const toggle = (active: boolean) =>
+    clsx(
+      "rounded px-2 py-0.5 text-[10px] transition-colors",
+      active ? "bg-[var(--accent-dim)] text-[var(--accent)]" : "text-[var(--text-hint)] hover:text-[var(--text-muted)]",
+    );
 
   return (
     <div
       className={clsx("overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)]", className)}
       style={{ background: "var(--bg-surface)" }}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
         <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-primary)]">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
             <polyline points="1,10 4,6 7,8 10,3 13,5" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           Price history &amp; volume
         </div>
-        <div className="flex items-center gap-1.5">
-          {(["line", "candle"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setChartType(t)}
-              className={clsx(
-                "rounded px-2 py-0.5 text-[10px] transition-colors",
-                chartType === t
-                  ? "bg-[var(--accent-dim)] text-[var(--accent)]"
-                  : "text-[var(--text-hint)] hover:text-[var(--text-muted)]",
-              )}
-            >
-              {t}
-            </button>
-          ))}
-          <span className="mx-1 h-3 w-px" style={{ background: "var(--border)" }} />
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              onClick={() => handleRange(r)}
-              className={clsx(
-                "rounded px-2 py-0.5 text-[10px] transition-colors",
-                activeRange === r
-                  ? "bg-[var(--accent-dim)] text-[var(--accent)]"
-                  : "text-[var(--text-hint)] hover:text-[var(--text-muted)]",
-              )}
-            >
-              {r}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div role="group" aria-label="Chart type" className="flex items-center gap-1.5">
+            {(["line", "candle"] as const).map((t) => (
+              <button key={t} type="button" aria-pressed={chartType === t} onClick={() => setChartType(t)} className={toggle(chartType === t)}>
+                {t}
+              </button>
+            ))}
+          </div>
+          <span className="mx-1 h-3 w-px" style={{ background: "var(--border)" }} aria-hidden />
+          <div role="group" aria-label="Time range" className="flex items-center gap-1.5">
+            {RANGES.map((r) => (
+              <button key={r.value} type="button" aria-pressed={range === r.value} onClick={() => setRange(r.value)} className={toggle(range === r.value)}>
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div ref={containerRef} className="h-[200px] w-full" />
+      {visible.length ? (
+        <div ref={containerRef} role="img" aria-label="Price history chart" className="h-[200px] w-full" />
+      ) : (
+        <div className="flex h-[200px] items-center justify-center text-xs text-[var(--text-hint)]">
+          No price history yet
+        </div>
+      )}
 
       <div className="flex items-center gap-4 border-t border-[var(--border)] px-4 py-2 text-[10px] text-[var(--text-hint)]">
         <span className="flex items-center gap-1.5">

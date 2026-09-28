@@ -1,17 +1,26 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import {
+  STEAM_OPENID_URL,
+  STEAM_STATE_COOKIE,
+  STEAM_STATE_MAX_AGE,
+  appOrigin,
+  newSteamState,
+  stateCookieOptions,
+  steamReturnUrl,
+} from "@/lib/steam-openid";
 
-const STEAM_OPENID_URL = "https://steamcommunity.com/openid/login";
-const RETURN_URL = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/auth/steam/callback`;
-
-export async function GET(_req: NextRequest) {
+export async function GET() {
+  const state = newSteamState();
   const params = new URLSearchParams({
     "openid.ns":         "http://specs.openid.net/auth/2.0",
     "openid.mode":       "checkid_setup",
-    "openid.return_to":  RETURN_URL,
-    "openid.realm":      process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+    "openid.return_to":  steamReturnUrl(state),
+    "openid.realm":      appOrigin(),
     "openid.identity":   "http://specs.openid.net/auth/2.0/identifier_select",
     "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
   });
 
-  return NextResponse.redirect(`${STEAM_OPENID_URL}?${params}`);
+  const res = NextResponse.redirect(`${STEAM_OPENID_URL}?${params}`);
+  res.cookies.set(STEAM_STATE_COOKIE, state, stateCookieOptions(STEAM_STATE_MAX_AGE));
+  return res;
 }

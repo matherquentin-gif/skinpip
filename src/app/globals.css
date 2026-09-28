@@ -13,10 +13,12 @@
   --accent-hover: #16C784;
   --accent-press: #0E9F6E;
   --accent-dim:   rgba(37,229,154,0.12);
+  --on-accent:    #06231A;
 
   --text-primary: #EAF4EF;
   --text-muted:   #8AA399;
-  --text-hint:    #4E6860;
+  /* 4.5:1+ on both --bg-app and --bg-surface (WCAG AA for small text). */
+  --text-hint:    #6E8A80;
 
   --gain:         #25E59A;
   --loss:         #FF5C61;
@@ -32,6 +34,7 @@
 
 /* ── Mint (light) — optional toggle ── */
 [data-theme="light"] {
+  color-scheme: light;
   --bg-app:       #F7FBF9;
   --bg-surface:   #FFFFFF;
   --bg-elevated:  #F0F7F4;
@@ -44,13 +47,14 @@
   --accent-dim:   rgba(22,199,132,0.10);
   --text-primary: #0B1F17;
   --text-muted:   #5B6F66;
-  --text-hint:    #9BB3A9;
+  --text-hint:    #5F7A70;
   --gain:         #16C784;
   --loss:         #E5484D;
   --warn:         #D97706;
 }
 
 html {
+  color-scheme: dark;
   background: var(--bg-app);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
@@ -75,3 +79,12 @@ body {
 .pip-sub { color: var(--accent); }
 .gain    { color: var(--gain); }
 .loss    { color: var(--loss); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

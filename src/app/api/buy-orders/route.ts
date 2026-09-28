@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getBalance, reservePips } from "@/lib/ledger";
+import { ALL_PHASES } from "@/lib/phase-map";
+import { intParam } from "@/lib/query-params";
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -11,20 +13,33 @@ import { getBalance, reservePips } from "@/lib/ledger";
 
 const ConditionsSchema = z
   .object({
-    paintSeeds: z.array(z.number().int().min(0).max(1000)).optional(),
-    phases: z.array(z.string()).optional(),
+    // Deduplicated so a pasted list with repeats doesn't bloat the row.
+    paintSeeds: z
+      .array(z.number().int().min(0).max(1000))
+      .max(1001)
+      .transform((s) => Array.from(new Set(s)))
+      .optional(),
+    phases: z.array(z.enum(ALL_PHASES as [string, ...string[]])).optional(),
     floatMin: z.number().min(0).max(1).optional(),
     floatMax: z.number().min(0).max(1).optional(),
-    stickers: z.array(z.record(z.string(), z.unknown())).optional(),
-    charms: z.array(z.record(z.string(), z.unknown())).optional(),
+    stickers: z.array(z.record(z.string(), z.unknown())).max(5).optional(),
+    charms: z.array(z.record(z.string(), z.unknown())).max(1).optional(),
+  })
+  .refine((c) => c.floatMin == null || c.floatMax == null || c.floatMin <= c.floatMax, {
+    message: "floatMin cannot exceed floatMax",
+    path: ["floatMin"],
   })
   .optional();
 
 const CreateBuyOrderSchema = z.object({
   marketId: z.string().cuid(),
-  pricePips: z.string().regex(/^\d+$/).transform(BigInt),
+  pricePips: z.string().regex(/^\d{1,18}$/).transform(BigInt),
   conditions: ConditionsSchema,
-  expiresAt: z.string().datetime().optional(),
+  expiresAt: z
+    .string()
+    .datetime()
+    .refine((d) => new Date(d).getTime() > Date.now(), { message: "expiresAt must be in the future" })
+    .optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -132,6 +147,11 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (err) {
+    // The balance pre-check above is advisory; the ledger's locked check is
+    // authoritative when another request spent the balance in between.
+    if (err instanceof Error && err.message.startsWith("ledger.reservePips: insufficient")) {
+      return NextResponse.json({ error: "Insufficient available balance" }, { status: 422 });
+    }
     console.error("[POST /api/buy-orders]", err);
     return NextResponse.json(
       { error: "Failed to create buy order" },
@@ -145,13 +165,20 @@ export async function POST(req: NextRequest) {
 // ---------------------------------------------------------------------------
 
 export async function GET(req: NextRequest) {
+  try {
+    return await listBuyOrders(req);
+  } catch (err) {
+    if (err instanceof NextResponse) return err;
+    console.error("[GET /api/buy-orders]", err);
+    return NextResponse.json({ error: "Buy orders are temporarily unavailable" }, { status: 503 });
+  }
+}
+
+async function listBuyOrders(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const mine = searchParams.get("mine") === "true";
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(
-    100,
-    Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10))
-  );
+  const page = intParam(searchParams.get("page"), 1, 1, 10_000);
+  const limit = intParam(searchParams.get("limit"), 50, 1, 100);
   const skip = (page - 1) * limit;
 
   if (mine) {

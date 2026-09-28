@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "db:push": "prisma db push",
     "seed": "tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && npm run seed",

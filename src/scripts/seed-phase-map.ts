@@ -1,19 +1,11 @@
 import { db } from "@/lib/db";
+import { PHASE_MAP as PHASE_LABELS } from "@/lib/phase-map";
 
-const PHASE_MAP: { paintIndex: number; phaseLabel: string }[] = [
-  { paintIndex: 415, phaseLabel: "Phase 1" },
-  { paintIndex: 416, phaseLabel: "Phase 2" },
-  { paintIndex: 417, phaseLabel: "Phase 3" },
-  { paintIndex: 418, phaseLabel: "Phase 4" },
-  { paintIndex: 419, phaseLabel: "Ruby" },
-  { paintIndex: 420, phaseLabel: "Sapphire" },
-  { paintIndex: 421, phaseLabel: "Black Pearl" },
-  { paintIndex: 569, phaseLabel: "Gamma Phase 1" },
-  { paintIndex: 570, phaseLabel: "Gamma Phase 2" },
-  { paintIndex: 571, phaseLabel: "Gamma Phase 3" },
-  { paintIndex: 572, phaseLabel: "Gamma Phase 4" },
-  { paintIndex: 568, phaseLabel: "Emerald" },
-];
+// Single source of truth lives in src/lib/phase-map.ts.
+const PHASE_MAP = Object.entries(PHASE_LABELS).map(([paintIndex, phaseLabel]) => ({
+  paintIndex: Number(paintIndex),
+  phaseLabel,
+}));
 
 async function main(): Promise<void> {
   console.log(`Seeding ${PHASE_MAP.length} PhaseMap entries...`);
