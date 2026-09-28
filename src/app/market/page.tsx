@@ -270,8 +270,8 @@ export default function MarketPage() {
               style={{ opacity: loading ? 0.5 : 1 }}
               aria-busy={loading}
             >
-              {items.map((item) => (
-                <SkinCard key={item.id} item={item} />
+              {items.map((item, i) => (
+                <SkinCard key={item.id} item={item} eager={i < 4} />
               ))}
             </div>
           )}

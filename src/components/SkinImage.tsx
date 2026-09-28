@@ -4,11 +4,10 @@ import { clsx } from "clsx";
 interface SkinImageProps {
   src: string | null;
   alt: string;
-  width: number;
-  height: number;
+  /** Sizes the image box (e.g. "h-28 w-full"); the render is contained within it. */
   className?: string;
-  /** Load eagerly (use for the main above-the-fold image only). */
-  priority?: boolean;
+  /** Load immediately: for above-the-fold images such as the first grid row. */
+  eager?: boolean;
 }
 
 /**
@@ -16,10 +15,10 @@ interface SkinImageProps {
  *
  * `unoptimized` serves Steam's image directly: the renders are already small,
  * and it keeps Vercel image-optimization usage at zero. next/image still gives
- * us lazy loading and reserved dimensions (no layout shift). Drop
- * `unoptimized` to enable resizing; the hosts are allowed in next.config.ts.
+ * us lazy loading and a reserved box (no layout shift). Drop `unoptimized` to
+ * enable resizing; the hosts are allowed in next.config.ts.
  */
-export function SkinImage({ src, alt, width, height, className, priority }: SkinImageProps) {
+export function SkinImage({ src, alt, className, eager }: SkinImageProps) {
   if (!src) {
     return (
       <div className={clsx("flex items-center justify-center text-xs text-[var(--text-hint)]", className)}>
@@ -28,14 +27,16 @@ export function SkinImage({ src, alt, width, height, className, priority }: Skin
     );
   }
   return (
-    <Image
-      src={src}
-      alt={alt}
-      width={width}
-      height={height}
-      unoptimized
-      priority={priority}
-      className={clsx("object-contain", className)}
-    />
+    <div className={clsx("relative", className)}>
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        unoptimized
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : undefined}
+        className="object-contain"
+      />
+    </div>
   );
 }

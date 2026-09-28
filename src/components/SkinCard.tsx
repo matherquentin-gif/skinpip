@@ -32,6 +32,8 @@ function liquidityColor(score: number): string {
 interface SkinCardProps {
   item: SkinCardData;
   className?: string;
+  /** Load the image eagerly (first row of a grid). */
+  eager?: boolean;
 }
 
 function FloatBar({ value }: { value: number }) {
@@ -46,7 +48,7 @@ function FloatBar({ value }: { value: number }) {
   );
 }
 
-export function SkinCard({ item, className }: SkinCardProps) {
+export function SkinCard({ item, className, eager }: SkinCardProps) {
   const isGain = (item.changePercent ?? 0) > 0;
   const isLoss = (item.changePercent ?? 0) < 0;
 
@@ -66,8 +68,7 @@ export function SkinCard({ item, className }: SkinCardProps) {
         <SkinImage
           src={item.imageUrl}
           alt={`${item.weaponName} | ${item.skinName}`}
-          width={256}
-          height={192}
+          eager={eager}
           className="h-28 w-full transition-transform duration-200 group-hover:scale-105"
         />
       </div>

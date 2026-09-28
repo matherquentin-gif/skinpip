@@ -79,9 +79,7 @@ export default async function ItemPage(props: PageProps<"/market/[id]">) {
               <SkinImage
                 src={item.imageUrl}
                 alt={itemTitle(item)}
-                width={320}
-                height={240}
-                priority
+                eager
                 className="h-40 w-full"
               />
             </div>

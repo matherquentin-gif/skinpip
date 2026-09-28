@@ -80,7 +80,7 @@ export default function AuctionsPage() {
                     className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[var(--radius-md)] sm:h-24 sm:w-24"
                     style={{ background: "var(--bg-input)" }}
                   >
-                    <SkinImage src={imageForKey(a.imageKey)} alt={title} width={96} height={72} className="h-16 w-full sm:h-20" />
+                    <SkinImage src={imageForKey(a.imageKey)} alt={title} className="h-16 w-full sm:h-20" />
                   </div>
 
                   <div className="min-w-0 space-y-1">
