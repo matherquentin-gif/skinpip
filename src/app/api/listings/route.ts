@@ -75,8 +75,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Item must not already be listed or up for auction
-  if (item.isListed || item.auctionItem?.status === "ACTIVE") {
+  // Item must not already be listed or in an auction that hasn't settled
+  // (an ENDED auction still owes the item to its winner).
+  const auctionStatus = item.auctionItem?.status;
+  if (item.isListed || auctionStatus === "ACTIVE" || auctionStatus === "ENDED") {
     return NextResponse.json(
       { error: "Item is already listed" },
       { status: 409 }

@@ -33,8 +33,8 @@ interface ApiResponse {
 }
 
 interface Results {
-  /** The query these results answer; compared with the current one to derive `loading`. */
-  query: string;
+  /** The request these results answer; compared with the current one to derive `loading`. */
+  key: string;
   items: SkinCardData[];
   total: number;
   page: number;
@@ -68,6 +68,8 @@ export default function MarketPage() {
   const [filters, setFilters] = useState<SkinSearchFilters>({});
   const [results, setResults] = useState<Results | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Bumped by "Retry" so an identical query can be fetched again.
+  const [attempt, setAttempt] = useState(0);
 
   // Typing in the price boxes shouldn't fire a request per keystroke.
   const debouncedMin = useDebouncedValue(priceMin, 350);
@@ -94,10 +96,11 @@ export default function MarketPage() {
     // Abort the previous request so a slow, stale response can never
     // overwrite the results for the filters the user has now.
     const ctrl = new AbortController();
+    const key = `${query}#${attempt}`;
     fetchPage(query, 1, ctrl.signal)
       .then((data) =>
         setResults({
-          query,
+          key,
           items: data.items.map(toCard),
           total: data.total,
           page: data.page,
@@ -108,20 +111,14 @@ export default function MarketPage() {
       )
       .catch((err: Error) => {
         if (err.name === "AbortError") return;
-        setResults((prev) => ({
-          query,
-          items: prev?.items ?? [],
-          total: prev?.total ?? 0,
-          page: prev?.page ?? 1,
-          pages: prev?.pages ?? 1,
-          source: prev?.source ?? null,
-          error: true,
-        }));
+        // Don't keep showing the previous query's items under the new filters.
+        setResults({ key, items: [], total: 0, page: 1, pages: 1, source: null, error: true });
       });
     return () => ctrl.abort();
-  }, [query]);
+  }, [query, attempt]);
 
-  const loading = results?.query !== query;
+  const requestKey = `${query}#${attempt}`;
+  const loading = results?.key !== requestKey;
   const items = results?.items ?? [];
   const canLoadMore = !loading && results != null && results.page < results.pages;
 
@@ -131,7 +128,7 @@ export default function MarketPage() {
     try {
       const data = await fetchPage(query, results.page + 1);
       setResults((prev) =>
-        prev && prev.query === query
+        prev && prev.key === requestKey
           ? { ...prev, items: [...prev.items, ...data.items.map(toCard)], page: data.page, pages: data.pages }
           : prev,
       );
@@ -242,9 +239,10 @@ export default function MarketPage() {
           </div>
 
           {results?.error && !loading && (
-            <p role="alert" className="rounded-[var(--radius-md)] border px-3 py-2 text-xs" style={{ borderColor: "var(--loss)", color: "var(--loss)" }}>
-              Couldn&apos;t load listings. Check your connection and try again.
-            </p>
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-md)] border px-3 py-2 text-xs" style={{ borderColor: "var(--loss)", color: "var(--loss)" }}>
+              <span>Couldn&apos;t load listings. Check your connection and try again.</span>
+              <Button variant="secondary" size="sm" onClick={() => setAttempt((a) => a + 1)}>Retry</Button>
+            </div>
           )}
 
           {results == null ? (
@@ -257,7 +255,7 @@ export default function MarketPage() {
                 />
               ))}
             </div>
-          ) : items.length === 0 && !loading ? (
+          ) : results.error && !loading ? null : items.length === 0 && !loading ? (
             <div
               className="rounded-[var(--radius-lg)] border border-[var(--border)] py-16 text-center text-sm"
               style={{ background: "var(--bg-surface)", color: "var(--text-muted)" }}

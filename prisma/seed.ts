@@ -69,8 +69,10 @@ async function clearDemo() {
   await db.priceTick.deleteMany({});
   await db.item.deleteMany({});
   await db.marketDefinition.deleteMany({});
-  await db.ledgerEntry.deleteMany({});
-  await db.walletAccount.deleteMany({});
+  // Wallets and ledger history are money: only ever touch the demo users'.
+  const demoUser = { steamId: { startsWith: "DEMO_" } };
+  await db.ledgerEntry.deleteMany({ where: { walletAccount: { user: demoUser } } });
+  await db.walletAccount.deleteMany({ where: { user: demoUser } });
   await db.tradeOfferJob.deleteMany({});
   await db.botAccount.deleteMany({});
   await db.user.deleteMany({ where: { steamId: { startsWith: "DEMO_" } } });

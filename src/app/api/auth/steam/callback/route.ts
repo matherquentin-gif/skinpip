@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { upsertSteamUser, createSessionToken, setSessionCookie } from "@/lib/auth";
-import { STEAM_OPENID_URL, steamReturnUrl } from "@/lib/steam-openid";
+import {
+  STEAM_OPENID_URL,
+  STEAM_STATE_COOKIE,
+  stateCookieOptions,
+  statesMatch,
+  steamReturnUrl,
+} from "@/lib/steam-openid";
 
 const STEAM_ID_PATTERN = /^https?:\/\/steamcommunity\.com\/openid\/id\/(\d+)$/;
 
@@ -8,7 +14,10 @@ const STEAM_ID_PATTERN = /^https?:\/\/steamcommunity\.com\/openid\/id\/(\d+)$/;
 const REQUIRED_SIGNED_FIELDS = ["claimed_id", "identity", "return_to", "op_endpoint"];
 
 function fail(req: NextRequest, reason: "failed" | "invalid" | "error") {
-  return NextResponse.redirect(new URL(`/?auth=${reason}`, req.url));
+  const res = NextResponse.redirect(new URL(`/?auth=${reason}`, req.url));
+  // The state is single-use whatever the outcome.
+  res.cookies.set(STEAM_STATE_COOKIE, "", stateCookieOptions(0));
+  return res;
 }
 
 export async function GET(req: NextRequest) {
@@ -16,6 +25,12 @@ export async function GET(req: NextRequest) {
 
   // Only accept a positive assertion.
   if (searchParams.get("openid.mode") !== "id_res") return fail(req, "failed");
+
+  // The login must have been started by this browser (see steam-openid.ts).
+  const state = searchParams.get("state");
+  if (!statesMatch(state, req.cookies.get(STEAM_STATE_COOKIE)?.value)) {
+    return fail(req, "invalid");
+  }
 
   // Extract the claimed Steam ID.
   const claimedId = searchParams.get("openid.claimed_id") ?? "";
@@ -29,7 +44,7 @@ export async function GET(req: NextRequest) {
   // as valid) from being replayed here to log in as that Steam account.
   if (
     searchParams.get("openid.op_endpoint") !== STEAM_OPENID_URL ||
-    searchParams.get("openid.return_to") !== steamReturnUrl()
+    searchParams.get("openid.return_to") !== steamReturnUrl(state!)
   ) {
     return fail(req, "invalid");
   }
@@ -46,7 +61,10 @@ export async function GET(req: NextRequest) {
   // Confirm with Steam that the assertion is valid. The verification POST goes
   // to the hardcoded Steam endpoint (never one taken from the response), so a
   // forged op_endpoint can't redirect verification to an attacker server.
-  const verifyParams = new URLSearchParams(Object.fromEntries(searchParams));
+  // Only the openid.* fields are sent; `state` is ours.
+  const verifyParams = new URLSearchParams(
+    [...searchParams].filter(([k]) => k.startsWith("openid.")),
+  );
   verifyParams.set("openid.mode", "check_authentication");
 
   let verifyText: string;
@@ -86,6 +104,7 @@ export async function GET(req: NextRequest) {
   // Build the redirect response and attach the session cookie.
   const response = NextResponse.redirect(new URL("/inventory", req.url));
   setSessionCookie(response, token);
+  response.cookies.set(STEAM_STATE_COOKIE, "", stateCookieOptions(0));
 
   // Remove the legacy raw-steamId cookie if it is still present.
   response.cookies.set("session_steam_id", "", {

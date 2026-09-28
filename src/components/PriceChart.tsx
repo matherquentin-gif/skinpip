@@ -134,7 +134,7 @@ export function PriceChart({ data, className, defaultRange = "30d" }: PriceChart
       chart.timeScale().fitContent();
     }
 
-    init();
+    init().catch((err) => console.error("[PriceChart] failed to render:", err));
     return () => {
       disposed = true;
       chart?.remove();

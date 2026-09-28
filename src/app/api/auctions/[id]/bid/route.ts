@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { reservePips, releasePips } from "@/lib/ledger";
+import { lockWallets, reservePips, releasePips } from "@/lib/ledger";
 
 const BidSchema = z.object({
-  bidPips: z.string().regex(/^\d+$/).transform(BigInt),
+  // Positive, and short enough to stay far inside BIGINT range.
+  bidPips: z.string().regex(/^[1-9]\d{0,17}$/, "bidPips must be a positive whole number of pips").transform(BigInt),
 });
 
 /** Thrown inside the transaction to return a specific HTTP error. */
@@ -92,6 +93,10 @@ export async function POST(
         where: { auctionId },
         orderBy: { amountPips: "desc" },
       });
+
+      // Take both wallet locks in a fixed order before touching either
+      // (see lockWallets: avoids deadlocks between crossing bids).
+      await lockWallets(tx, prevBid ? [prevBid.bidderId, user.id] : [user.id]);
 
       if (prevBid) {
         if (prevBid.bidderId !== user.id) {

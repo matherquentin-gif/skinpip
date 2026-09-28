@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PipDisplay } from "@/components/ui/PipDisplay";
-import { pipsToUSD } from "@/lib/pips";
 import { getSessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getBalance } from "@/lib/ledger";
@@ -57,11 +56,12 @@ export default async function InventoryPage() {
 
   const { items, listings, balance } = await getInventoryData(user.id);
 
-  const stats = [
+  const stats: { label: string; value: string | bigint; sub: string }[] = [
     { label: "In custody", value: String(items), sub: "items with SkinPip" },
     { label: "Listed", value: String(listings), sub: "active listings" },
-    { label: "Available balance", value: pipsToUSD(balance.availablePips), sub: "ready to use" },
-    { label: "Reserved", value: pipsToUSD(balance.reservedPips), sub: "in orders & bids" },
+    // Balances use PipDisplay, which is exact (never rounds a balance up).
+    { label: "Available balance", value: balance.availablePips, sub: "ready to use" },
+    { label: "Reserved", value: balance.reservedPips, sub: "in orders & bids" },
   ];
 
   return (
@@ -81,7 +81,7 @@ export default async function InventoryPage() {
           <Card key={s.label}>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>{s.label}</p>
             <p className="mt-1 font-mono text-xl font-semibold" style={{ color: "var(--accent)" }}>
-              {s.value}
+              {typeof s.value === "bigint" ? <PipDisplay pips={s.value} size="md" /> : s.value}
             </p>
             <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{s.sub}</p>
           </Card>

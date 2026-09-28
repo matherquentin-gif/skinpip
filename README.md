@@ -52,4 +52,6 @@ to a deterministic demo dataset (see [DEMO_TESTING.md](DEMO_TESTING.md)).
 - Never commit credentials. `.env*` files are git-ignored except
   `.env.example`, and this repository is public.
 - `NEXT_PUBLIC_APP_URL` must match the site's real origin: the Steam login
-  callback rejects assertions whose `return_to` doesn't match it.
+  callback rejects assertions whose `return_to` doesn't match it, and a
+  one-time state cookie ties each login to the browser that started it. A
+  login started on any other host (such as a Vercel preview URL) fails.

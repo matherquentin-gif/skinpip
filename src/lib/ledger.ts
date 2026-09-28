@@ -68,6 +68,24 @@ async function lockWallet(
   };
 }
 
+/**
+ * Lock several users' wallets up front, always in the same (sorted) order.
+ *
+ * A transaction that touches two wallets must take both locks in a global
+ * order. Otherwise two transactions that each lock one wallet and then wait
+ * for the other's deadlock (e.g. two users outbidding each other on different
+ * auctions at the same moment), and Postgres aborts one of them. Later
+ * ledger calls in the same transaction re-acquire these locks for free.
+ */
+export async function lockWallets(
+  tx: PrismaTransactionClient,
+  userIds: string[]
+): Promise<void> {
+  for (const userId of [...new Set(userIds)].sort()) {
+    await lockWallet(tx, userId);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Core posting function
 // ---------------------------------------------------------------------------

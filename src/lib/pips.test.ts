@@ -28,10 +28,18 @@ test("pipsToDisplay matches pipsToUSD without the symbol", () => {
   assert.equal(pipsToDisplay(-2_500n), "-0.0250");
 });
 
-test("pipsToSplit shows 5 decimals below a cent, 4 otherwise", () => {
+test("pipsToSplit is exact: 5 decimals below a cent or when needed, else 4", () => {
   assert.deepEqual(pipsToSplit(7n), { whole: "$0.", sub: "00007" });
   assert.deepEqual(pipsToSplit(200n), { whole: "$0.", sub: "00200" });
   assert.deepEqual(pipsToSplit(124_755_200n), { whole: "$1,247.", sub: "5520" });
+  assert.deepEqual(pipsToSplit(124_755_201n), { whole: "$1,247.", sub: "55201" });
+  // A $0.99999 balance must never display as $1.0000.
+  assert.deepEqual(pipsToSplit(99_999n), { whole: "$0.", sub: "99999" });
+});
+
+test("pipsToUSD switches to cents when 4-place rounding would reach $1", () => {
+  assert.equal(pipsToUSD(99_994n), "$0.9999");
+  assert.equal(pipsToUSD(99_995n), "$1.00");
 });
 
 test("parseUsdToPips parses exact decimal input", () => {
@@ -39,6 +47,7 @@ test("parseUsdToPips parses exact decimal input", () => {
   assert.equal(parseUsdToPips("0.00001"), 1n);
   assert.equal(parseUsdToPips(".5"), 50_000n);
   assert.equal(parseUsdToPips("$1,234.5"), 123_450_000n);
+  assert.equal(parseUsdToPips("1,234,567"), 123_456_700_000n);
   assert.equal(parseUsdToPips("  3. "), 300_000n);
 });
 
@@ -49,6 +58,8 @@ test("parseUsdToPips rejects invalid or sub-pip input", () => {
   assert.equal(parseUsdToPips("-1"), null);
   assert.equal(parseUsdToPips("1e5"), null);
   assert.equal(parseUsdToPips("0.000001"), null);
+  assert.equal(parseUsdToPips("1,2,3"), null);
+  assert.equal(parseUsdToPips("12,34.5"), null);
 });
 
 test("sellerNetPips takes the 2% fee", () => {

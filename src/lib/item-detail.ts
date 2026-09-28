@@ -171,7 +171,18 @@ async function dbDetail(id: string): Promise<ItemDetail | null> {
           take: 365,
         }),
         db.trade.findMany({
-          where: { item: { weaponName: item.weaponName, skinName: item.skinName, wearName: item.wearName } },
+          // Same variant only: paintIndex separates Doppler phases, and
+          // StatTrak/Souvenir copies trade at different prices.
+          where: {
+            item: {
+              weaponName: item.weaponName,
+              skinName: item.skinName,
+              wearName: item.wearName,
+              paintIndex: item.paintIndex,
+              isStatTrak: item.isStatTrak,
+              isSouvenir: item.isSouvenir,
+            },
+          },
           orderBy: { createdAt: "desc" },
           take: 5,
           select: { pricePips: true, createdAt: true, item: { select: { paintWear: true } } },

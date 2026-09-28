@@ -26,12 +26,13 @@ export function pipsToNumber(pips: Pips): number {
  * whole pips (more than 5 decimal places is rejected rather than rounded).
  */
 export function parseUsdToPips(input: string): Pips | null {
-  const s = input.trim().replace(/^\$/, "").replace(/,/g, "");
-  const m = /^(\d*)(?:\.(\d*))?$/.exec(s);
+  const s = input.trim().replace(/^\$/, "");
+  // Commas only as real thousands separators ("1,234.5"), never "1,2,3".
+  const m = /^(\d{1,3}(?:,\d{3})+|\d*)(?:\.(\d*))?$/.exec(s);
   if (!m || (m[1] === "" && !m[2])) return null;
   const frac = m[2] ?? "";
   if (frac.length > PIP_DECIMALS) return null;
-  const whole = m[1] === "" ? 0n : BigInt(m[1]);
+  const whole = m[1] === "" ? 0n : BigInt(m[1].replace(/,/g, ""));
   return whole * PIPS_PER_DOLLAR + BigInt(frac.padEnd(PIP_DECIMALS, "0"));
 }
 
@@ -54,7 +55,8 @@ function formatFixed(pips: Pips, decimals: number): { sign: string; whole: strin
 function displayDecimals(pips: Pips): number {
   const abs = pips < 0n ? -pips : pips;
   if (abs < PIPS_PER_CENT) return 5;
-  if (abs < PIPS_PER_DOLLAR) return 4;
+  // 99,995+ pips round to $1.0000 at 4 places, so they get the $1+ format.
+  if (abs < PIPS_PER_DOLLAR - 5n) return 4;
   return 2;
 }
 
@@ -83,12 +85,14 @@ export function pipsToExact(pips: Pips): string {
 
 /**
  * Split for the two-tone price display: `whole` = "$1,247." and `sub` = the
- * decimals. Shows 4 decimals, or all 5 below $0.01 so sub-cent prices keep
- * their full pip precision.
+ * decimals. Always exact, never rounded (it also shows wallet balances, which
+ * must never read higher than they are): 4 decimals when that's lossless,
+ * otherwise all 5, and always 5 below $0.01.
  */
 export function pipsToSplit(pips: Pips): { whole: string; sub: string } {
   const abs = pips < 0n ? -pips : pips;
-  const { sign, whole, frac } = formatFixed(pips, abs < PIPS_PER_CENT ? 5 : 4);
+  const lossless4 = abs % 10n === 0n;
+  const { sign, whole, frac } = formatFixed(pips, abs < PIPS_PER_CENT || !lossless4 ? 5 : 4);
   return { whole: `${sign}$${whole}.`, sub: frac };
 }
 
